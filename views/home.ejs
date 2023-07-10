@@ -1,0 +1,105 @@
+<%- include("partials/header.ejs")%>
+
+
+  <main class="form-signin">
+    <!-- <form id="fileUpload" action="<%= body.domain %>/fileUpload" method="post" enctype="multipart/form-data"> -->
+    <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
+
+    <div class="container py-5">
+
+      <nav>
+        <div class="nav-tabs " id="nav-tab" role="tablist">
+          <ul class="nav justify-content-center">
+            <li class="nav-item">
+              <button class="nav-link active " id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate"
+                type="button" role="tab" aria-controls="generate" aria-selected="true">Generate</button>
+              <!-- <a class="nav-link active" aria-current="page" href="#">Active</a> -->
+            </li>
+            <li class="nav-item">
+              <button class="nav-link" id="brand-finder-tab" data-bs-toggle="tab" data-bs-target="#brand-finder"
+                type="button" role="tab" aria-controls="brand-finder" aria-selected="false">Brand Finder</button>
+              <!-- <a class="nav-link" href="#">Link</a> -->
+            </li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+
+
+
+    <div class="tab-content" id="nav-tabContent ">
+      <div class="tab-pane fade show active" id="generate" role="tabpanel" aria-labelledby="generate-tab" tabindex="0">
+        <!-- start barcode copy -->
+        <div class="container">
+          <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+        
+            <div class="input-group">
+              <span class="input-group-text" id="addon-wrapping">Barcode #</span>
+              <input type="text" oninput="render(this)" style="text-transform:uppercase" class="form-control" placeholder="start typing to reveal barcode"
+                aria-label="tracking" aria-describedby="addon-wrapping">
+            </div>
+          </div>
+          <canvas class="py-3" id="barcode"></canvas>
+        </div>
+        
+        <!-- end barcode copy -->
+      </div>
+      <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">
+        <div class="container">
+          <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+        
+            <div class="input-group">
+              <span class="input-group-text" id="addon-wrapping">Barcode #</span>
+              <input type="text" oninput="search(this)" class="form-control " style="text-transform:uppercase" placeholder="search for brand"
+                aria-label="tracking" aria-describedby="addon-wrapping">
+            </div>
+          </div>
+          <div class="py-3" id="">
+            <p class="" id="brand">
+
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- <div class="tab-pane fade" id="nav-contact" role="tabpanel" aria-labelledby="nav-contact-tab" tabindex="0">...</div> -->
+      <!-- <div class="tab-pane fade" id="nav-disabled" role="tabpanel" aria-labelledby="nav-disabled-tab" tabindex="0">...</div> -->
+    </div>
+
+   
+
+
+
+
+
+    <!-- <button class="w-100 btn btn-lg btn-primary" type="submit">Upload <i class="fas fa-file-upload"></i></button> -->
+
+
+    <!-- </form> -->
+
+    <!-- Button trigger modal -->
+
+    <div class="fixed-bottom text-muted">
+
+      <p class="mt-5 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED Devops 2020 | Triumph Courier
+        Services</p>
+      </p>
+    </div>
+
+  </main>
+
+
+
+
+  <!-- JavaScript Bundle with Popper -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0"
+    crossorigin="anonymous"></script>
+  <!-- jQuery -->
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+  <!-- Script -->
+  <script src="<%= body.publicFolder %>js/barcode.js"></script>
+
+  </body>
+
+  </html>
