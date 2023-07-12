@@ -256,6 +256,7 @@ passport.use(new GoogleStrategy({
 app.route(APP_DIRECTORY + "/")
   .get(function (req, res) {
     // print(tempFilePath);
+    cacheBrands();
       res.render("home.ejs", {
         body: new Body("Barcode", "", ""),
       });
@@ -717,7 +718,7 @@ app.get(APP_DIRECTORY + "/hereApiKey", function (req, res) {
 app.listen(process.env.PORT || 3035, function () {
   clearTempFolder();
   cacheBrands();
-  console.log("RoutingAssistant is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
+  console.log("Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
   // print("./")
 });
 

@@ -1,7 +1,7 @@
 const domain = $('#domain').attr('domain');
 
 window.onload = (event) => {
-
+  $("#barcodeNumber").focus();
   // alert("loaded");
   
 };
@@ -10,6 +10,7 @@ function render(evt){
   field = $(evt);
   text = (field.val()).toUpperCase();
   if(text){
+    $("#printButton").removeClass("disabled");
     JsBarcode("#barcode", text, {
       // lineColor: "#7777",
       width:(text.length > 20)? 1.2 : 1.7,
@@ -17,6 +18,7 @@ function render(evt){
       displayValue: true
     });
   }else{
+    $("#printButton").addClass("disabled");
     JsBarcode("#barcode", " ", {
       lineColor: "#9999",
       // width:4,
@@ -25,6 +27,28 @@ function render(evt){
     });
   }
     
+}
+
+function transferDescription(evt){
+  let descriptionField  = $(evt) 
+  $("#description").val(descriptionField.val())
+}
+
+function printBarcode() {
+  // var printContents = document.getElementById(divName).innerHTML;
+  var printContents = $("#printArea").html();
+  var originalContents = $("body").html();
+  // var originalContents = $("#originalDoc").html();
+  let body = $("body");
+  
+  console.log(printContents);
+  console.log(originalContents);
+  
+  // body.html(printContents);
+  window.print();
+  // body.html(originalContents);
+
+
 }
 
 function search(evt) {
