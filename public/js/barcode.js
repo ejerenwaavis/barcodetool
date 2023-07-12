@@ -34,17 +34,15 @@ function transferDescription(evt){
   $("#description").val(descriptionField.val())
 }
 
+function clearNameField() {
+  $("#barcodeDescription").val("");
+   $("#description").val("")
+}
+
 function printBarcode() {
-  // var printContents = document.getElementById(divName).innerHTML;
-  var printContents = $("#printArea").html();
-  var originalContents = $("body").html();
-  // var originalContents = $("#originalDoc").html();
-  let body = $("body");
-  
-  console.log(printContents);
-  console.log(originalContents);
-  
-  // body.html(printContents);
+  if($("#description").val().length < 1){
+    $("#description").val(" ");
+  }
   window.print();
   // body.html(originalContents);
 

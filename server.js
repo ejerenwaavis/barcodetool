@@ -731,24 +731,50 @@ async function cacheBrands(){
   stringBrands = JSON.stringify(allBrands);
   // reCon = JSON.parse(stringBrands);
   // console.log(reCon);
-  fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
-  if (err) {
-    console.error(err);
-  }
-  // file written successfully
-  console.log("Brands written to file");
-});
+
+  fs.mkdir(tempFilePath, (err) => {
+      if (err) {
+        // console.log(err.message);
+        // console.log(err.code);
+        if (err.code === "EEXIST") {
+          console.error("Directory ALREADY Exists.");
+           fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
+              if (err) {
+                console.error(err);
+              }else{
+                console.log("Brands written to file");
+              }
+            }); 
+        } else {
+          console.error(err.code);;
+          console.error(err);;
+        }
+      }else{
+        fs.writeFile(tempFilePath + 'brands.txt', stringBrands, err => {
+          if (err) {
+            console.error(err);
+          }else{
+            console.log("Brands written to file");
+          }
+        }); 
+        console.log("'/tmp' Directory was created.");
+      }
+    });
+ 
 }
 
 async function clearTempFolder(){
   fs.readdir(tempFilePath, (err, files) => {
-  if (err) throw err;
-
-  for (const file of files) {
-    if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
-      fs.unlink(path.join(tempFilePath, file), (err) => {
-        if (err) throw err; 
-      });
+  if (err) {
+    console.error(err.code + " Failed to clear temp folder");
+  }else{
+    console.error(files);
+    for (const file of files) {
+      if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
+        fs.unlink(path.join(tempFilePath, file), (err) => {
+          if (err) throw err; 
+        });
+      }
     }
   }
 });
