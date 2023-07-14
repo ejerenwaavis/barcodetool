@@ -629,9 +629,9 @@ async function clearTempFolder(){
   if (err) {
     console.error(err.code + " Failed to clear temp folder");
   }else{
-    console.error(files);
+    // console.error(files);
     for (const file of files) {
-      if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("bra")){
+      if(file.startsWith("R4M") || file.startsWith("RW") || file.startsWith("brands.txt")){
         fs.unlink(path.join(tempFilePath, file), (err) => {
           if (err) throw err; 
         });
