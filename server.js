@@ -44,18 +44,6 @@ app.use(express.json());
 
 //Forcing https so as to allow frontend geolocation work properly
 
-if(SERVER){
-  app.use (function (req, res, next) {
-    // console.log(req.headers.host);
-    if (req.secure) {
-      // request was via https, so do no special handling
-      res.redirect('https://' + req.headers.host + req.url);
-    } else {
-      // request was via http, so redirect to https
-      res.redirect('https://' + req.headers.host + req.url);
-    }
-  });
-}
 
 
 // Mongoose Configuration and Setup
