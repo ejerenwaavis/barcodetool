@@ -13,23 +13,23 @@ function render(){
     $("#printButton").removeClass("disabled");
     JsBarcode("#barcode", text, {
       // lineColor: "#7777",
-      width:(text.length > 20)? 1.4 : 1.7,
+      width:(text.length > 18)? 2 : 2.5,
+      // width:3,
+      font: "Arial",
       marginTop: 50,
-      height:100,
+      height:200,
       displayValue: true
     });
     if(text.length > 6){
       findBrand(text).then((brand) => {
-        if(brand != "##--UNREGITERED--##"){
-
+       if(brand != "-- Server Error --"){
+            $("#barcodeBrand").val(brand);
             var canvas = $("#barcode")[0];
             const ctx = canvas.getContext("2d");
-
-
-            
-            ctx.font = "15px Arial";
+          
+            ctx.font = "16px Arial";
             ctx.textAlign = "center";
-            ctx.fillText(brand ,-110,35);
+            ctx.fillText(brand ,-100,42);
             console.log(ctx);
             console.log(ctx.width);
         }
@@ -40,13 +40,49 @@ function render(){
     $("#printButton").addClass("disabled");
     JsBarcode("#barcode", " ", {
       lineColor: "#9999",
-      // width:4,
-      height:85,
+      height:45,
       displayValue: false
     });
   }
     
 }
+
+function renderModal(){
+  field = $("#barcodeNumber");
+  text = (field.val()).toUpperCase();
+  brand = $("#barcodeBrand").val();
+  
+  if(text){
+    $("#printButton").removeClass("disabled");
+    JsBarcode("#barcodeModal", text, {
+      font: "Arial",
+      width:(text.length > 18)? 1.4 : 1.7,
+      marginTop: 50,
+      height:100,
+      displayValue: true
+    });
+    // if(text.length > 6){
+      $("#barcodeBrand").val(brand);
+      var canvas = $("#barcodeModal")[0];
+      const ctx = canvas.getContext("2d");
+    
+      ctx.font = "15px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(brand ,-100,42);
+      console.log(ctx);
+      console.log(ctx.width);
+  }else{
+    $("#printButton").addClass("disabled");
+    JsBarcode("#barcodeModal", " ", {
+      lineColor: "#9999",
+      // width:4,
+      height:45,
+      displayValue: false
+    });
+  }
+    
+}
+
 
 function transferDescription(evt){
   let descriptionField  = $(evt) 
@@ -57,6 +93,7 @@ function clearNameField() {
   $("#barcodeDescription").val("");
    $("#description").val("");
    render();
+   renderModal();
 }
 
 function printBarcode() {
@@ -78,9 +115,9 @@ function downloadImage() {
 
 
   
-  ctx.font = "20px Arial";
+  ctx.font = "22px Arial";
   ctx.textAlign = "center";
-  ctx.fillText(name ,-110,35);
+  ctx.fillText(name ,-110,24);
   console.log(ctx);
   console.log(ctx.width);
 
@@ -110,7 +147,7 @@ function findBrand(barcode){
           if(data.length > 0){
             resolve(data[0]._id);
           }else{
-            resolve("##--UNREGITERED--##");
+            resolve("#- UNREGITERED BRAND -#");
           }
         }else{
             reject("-- Server Error --");

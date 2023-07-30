@@ -38,12 +38,17 @@
               <input type="text" oninput="render(this)" id="barcodeNumber" style="text-transform:uppercase"
                 class="form-control" placeholder="start typing to reveal barcode" aria-label="tracking"
                 aria-describedby="addon-wrapping">
+              </div>
             </div>
-          </div>
+            <input disabled type="text" onchange="renderModal(this)" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
+              placeholder="Brand Name" >
 
           <div class="text-center container d-print-none pt-4" id="printArea">
-            <canvas class="pb-4 pt-0" id="barcode"></canvas>
-            <canvas hidden height="500" width="800" class=" pb-4 pt-0" id="barcode-big"></canvas>
+            <!-- Main Canvas -->
+
+            <canvas class="pb-4 pt-0" style="min-height: 200px; max-width: auto;" id="barcode"></canvas>
+            <!-- <canvas width="1890" height="1656"  style="width:360px;height:220px;" class="pb-4 pt-0" id="barcode"></canvas> -->
+            <!-- <canvas hidden height="500" width="800" class=" pb-4 pt-0" id="barcode-big"></canvas> -->
           </div>
 
           <div class="d-block d-print-none">
@@ -103,7 +108,8 @@
               onkeyup="transferDescription(this)" class="form-control d-print-none text-center"
               placeholder="Type a description to help iddentify the barcode" aria-label="Username"
               aria-describedby="basic-addon1">
-            <canvas class="pt-1 pb-3" id="barcode">
+              <!-- Canvas -->
+            <canvas  class="pt-1 pb-3" id="barcodeModal">
               
             </canvas>
           </div>
