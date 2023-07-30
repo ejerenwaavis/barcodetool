@@ -13,11 +13,28 @@ function render(){
     $("#printButton").removeClass("disabled");
     JsBarcode("#barcode", text, {
       // lineColor: "#7777",
-      width:(text.length > 20)? 1.2 : 1.7,
+      width:(text.length > 20)? 1.4 : 1.7,
       marginTop: 50,
       height:100,
       displayValue: true
     });
+    if(text.length > 6){
+      findBrand(text).then((brand) => {
+        if(brand != "##--UNREGITERED--##"){
+
+            var canvas = $("#barcode")[0];
+            const ctx = canvas.getContext("2d");
+
+
+            
+            ctx.font = "15px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(brand ,-110,35);
+            console.log(ctx);
+            console.log(ctx.width);
+        }
+      })
+    }
 
   }else{
     $("#printButton").addClass("disabled");
@@ -76,16 +93,32 @@ function search(evt) {
   tracking = ($(evt).val()).toUpperCase();
 
   if(tracking.length > 6){
-    $.get(domain + "/findBrand/"+tracking, function (data) {
-      if(data){
-        if(data.length > 0){
-          $("#brand").text(data[0]._id)
-        }else{
-          $("#brand").text("-- No Matches Found --")
-        }
-      }
+    findBrand(tracking).then((foundBrands) => {
+      console.log(foundBrands);
+      $("#brand").text(foundBrands)
+    }).catch((err) => {
+      console.log(err);
+      $("#brand").text(err)
     })
   }
+}
+
+function findBrand(barcode){
+  return new Promise(function (resolve, reject){
+      $.get(domain + "/findBrand/"+barcode, function (data,status) {
+        if(data){
+          if(data.length > 0){
+            resolve(data[0]._id);
+          }else{
+            resolve("##--UNREGITERED--##");
+          }
+        }else{
+            reject("-- Server Error --");
+
+        }
+      })
+      // reject("/--");
+  });
 }
 
 function deleteFile(path){
