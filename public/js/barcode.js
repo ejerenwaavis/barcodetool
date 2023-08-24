@@ -12,7 +12,7 @@ function render(){
   if(text){
     $("#printButton").removeClass("disabled");
     JsBarcode("#barcode", text, {
-      width:(text.length > 18)? 2 : 2.5,
+      width:(text.length > 16)? 1.6 : 2.1,
       font: "Arial",
       marginTop: 50,
       height:200,
