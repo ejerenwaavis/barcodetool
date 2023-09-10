@@ -11,13 +11,7 @@ function render(){
   text = (field.val()).toUpperCase();
   if(text){
     $("#printButton").removeClass("disabled");
-    JsBarcode("#barcode", text, {
-      width:(text.length > 18)? 2 : 2.5,
-      font: "Arial",
-      marginTop: 50,
-      height:200,
-      displayValue: true
-    });
+    
     if(text.length > 6){
       findBrand(text).then((brand) => {
        if(brand != "-- Server Error --"){
@@ -28,6 +22,21 @@ function render(){
             ctx.font = "16px Arial";
             ctx.textAlign = "center";
             ctx.fillText(brand ,-100,42);
+            JsBarcode("#barcode", text, {
+            width:(text.length > 18)? 1.8 : 2.2,
+            font: "Arial",
+            marginTop: 50,
+            height:200,
+            displayValue: true
+          });
+        }else{
+          JsBarcode("#barcode", text, {
+            width:(text.length > 18)? 1.8 : 2.2,
+            font: "Arial",
+            marginTop: 50,
+            height:200,
+            displayValue: true
+          });
         }
       })
     }
