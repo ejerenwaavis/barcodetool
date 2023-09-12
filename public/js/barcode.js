@@ -15,6 +15,14 @@ function render(){
     if(text.length > 6){
       findBrand(text).then((brand) => {
        if(brand != "-- Server Error --"){
+            JsBarcode("#barcode", text, {
+              width:(text.length > 14)? 2 : 2.4,
+              font: "Arial",
+              marginTop: 50,
+              height:120,
+              displayValue: true
+            });
+
             $("#barcodeBrand").val(brand);
             var canvas = $("#barcode")[0];
             const ctx = canvas.getContext("2d");
@@ -22,20 +30,14 @@ function render(){
             ctx.font = "16px Arial";
             ctx.textAlign = "center";
             ctx.fillText(brand ,-100,42);
-            JsBarcode("#barcode", text, {
-            width:(text.length > 18)? 1.8 : 2.2,
-            font: "Arial",
-            marginTop: 50,
-            height:200,
-            displayValue: true
-          });
+            
         }else{
           JsBarcode("#barcode", text, {
-            width:(text.length > 18)? 1.8 : 2.2,
-            font: "Arial",
-            marginTop: 50,
-            height:200,
-            displayValue: true
+              width:(text.length > 14)? 2 : 2.4,
+              font: "Arial",
+              marginTop: 50,
+              height:120,
+              displayValue: true
           });
         }
       })
@@ -44,8 +46,9 @@ function render(){
   }else{
     $("#printButton").addClass("disabled");
     JsBarcode("#barcode", " ", {
+      width: 1.4,
       lineColor: "#000",
-      height:45,
+      height:25,
       displayValue: false
     });
   }
@@ -86,7 +89,6 @@ function renderModal(){
   }
     
 }
-
 
 function transferDescription(evt){
   let descriptionField  = $(evt) 
@@ -173,8 +175,12 @@ function deleteFile(path){
 }
 
 
-
-
+function getTrackingnIno(trackingNumber){
+  return new Promsise(function (resolve, reject){
+    $.get("https://t.lasership.com/Track/YOURTRACKINGNUMBER/json
+")
+  });
+}
 
 // function selectStop(evt){
 //   let element = $(evt);

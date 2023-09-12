@@ -38,12 +38,12 @@
               <input type="text" oninput="render(this)" id="barcodeNumber" style="text-transform:uppercase"
                 class="form-control" placeholder="start typing to reveal barcode" aria-label="tracking"
                 aria-describedby="addon-wrapping">
-              </div>
+                 <button onclick="trackPackage()" class="btn btn-accent">Track</button>
             </div>
             <input disabled type="text" onchange="renderModal(this)" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
               placeholder="Brand Name" >
 
-          <div class="text-center container d-print-none pt-4" id="printArea">
+          <div class=" row p-0  m-auto text-center container d-print-none pt-4" id="printArea">
             <!-- Main Canvas -->
 
             <canvas class="pb-4 pt-0" id="barcode"></canvas>
@@ -62,7 +62,34 @@
       </div>
 
 
-
+<div class="mt-3 py-4 container-fluid text-start" >
+  <div class="list-group">
+    <a href="#" class="list-group-item list-group-item-action" aria-current="true">
+      <div class="d-flex w-100 justify-content-between">
+        <h5 class="mb-1">List group item heading</h5>
+        <small>3 days ago</small>
+      </div>
+      <p class="mb-1">Some placeholder content in a paragraph.</p>
+      <small>And some small print.</small>
+    </a>
+    <a href="#" class="list-group-item list-group-item-action">
+      <div class="d-flex w-100 justify-content-between">
+        <h5 class="mb-1">List group item heading</h5>
+        <small class="text-body-secondary">3 days ago</small>
+      </div>
+      <p class="mb-1">Some placeholder content in a paragraph.</p>
+      <small class="text-body-secondary">And some muted small print.</small>
+    </a>
+    <a href="#" class="list-group-item list-group-item-action">
+      <div class="d-flex w-100 justify-content-between">
+        <h5 class="mb-1">List group item heading</h5>
+        <small class="text-body-secondary">3 days ago</small>
+      </div>
+      <p class="mb-1">Some placeholder content in a paragraph.</p>
+      <small class="text-body-secondary">And some muted small print.</small>
+    </a>
+  </div>
+</div>
 
 
       <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">
@@ -137,9 +164,9 @@
 
     <!-- Button trigger modal -->
 
-    <div class="fixed-bottom text-muted d-print-none">
+    <div class="fixed-bottom bg-light text-muted d-print-none">
 
-      <p class="mt-5 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED Devops 2020 | Triumph Courier
+      <p class="mt-3 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED Devops 2020 | Triumph Courier
         Services</p>
       </p>
     </div>

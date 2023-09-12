@@ -66,7 +66,6 @@ var allBrands;
 
 
 
-
 /***********************BUSINESS LOGIC ************************************/
 
 app.route(APP_DIRECTORY + "/")
@@ -98,7 +97,6 @@ app.listen(process.env.PORT || 3035, function () {
   console.error("Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
   // print("./")
 });
-
 
 
 /************ helper function ***************/
