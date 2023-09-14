@@ -11,12 +11,12 @@
         <div class="nav-tabs " id="nav-tab" role="tablist">
           <ul class="nav justify-content-center">
             <li class="nav-item">
-              <button class="nav-link active " id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate"
+              <button class="nav-link active text-reset" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate"
                 type="button" role="tab" aria-controls="generate" aria-selected="true">Generate</button>
               <!-- <a class="nav-link active" aria-current="page" href="#">Active</a> -->
             </li>
             <li class="nav-item">
-              <button class="nav-link" id="brand-finder-tab" data-bs-toggle="tab" data-bs-target="#brand-finder"
+              <button class="nav-link text-reset" id="brand-finder-tab" data-bs-toggle="tab" data-bs-target="#brand-finder"
                 type="button" role="tab" aria-controls="brand-finder" aria-selected="false">Brand Finder</button>
               <!-- <a class="nav-link" href="#">Link</a> -->
             </li>
@@ -38,7 +38,7 @@
               <input type="text" oninput="render(this)" id="barcodeNumber" style="text-transform:uppercase"
                 class="form-control" placeholder="start typing to reveal barcode" aria-label="tracking"
                 aria-describedby="addon-wrapping">
-                 <button onclick="trackPackage()" class="btn btn-accent">Track</button>
+                <button onclick="trackPackage()" id="trackPackageBtn"  class="disabled btn btn-accent">Track</button>
             </div>
             <input disabled type="text" onchange="renderModal(this)" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
               placeholder="Brand Name" >
@@ -60,36 +60,26 @@
         </div>
         <!-- end barcode copy -->
       </div>
-
+<section class="" id="trackingInfoDisplay">
 
 <div class="mt-3 py-4 container-fluid text-start" >
-  <div class="list-group">
-    <a href="#" class="list-group-item list-group-item-action" aria-current="true">
-      <div class="d-flex w-100 justify-content-between">
-        <h5 class="mb-1">List group item heading</h5>
-        <small>3 days ago</small>
-      </div>
-      <p class="mb-1">Some placeholder content in a paragraph.</p>
-      <small>And some small print.</small>
-    </a>
-    <a href="#" class="list-group-item list-group-item-action">
-      <div class="d-flex w-100 justify-content-between">
-        <h5 class="mb-1">List group item heading</h5>
-        <small class="text-body-secondary">3 days ago</small>
-      </div>
-      <p class="mb-1">Some placeholder content in a paragraph.</p>
-      <small class="text-body-secondary">And some muted small print.</small>
-    </a>
-    <a href="#" class="list-group-item list-group-item-action">
-      <div class="d-flex w-100 justify-content-between">
-        <h5 class="mb-1">List group item heading</h5>
-        <small class="text-body-secondary">3 days ago</small>
-      </div>
-      <p class="mb-1">Some placeholder content in a paragraph.</p>
-      <small class="text-body-secondary">And some muted small print.</small>
-    </a>
+  <div class="list-group placeholder-wave" id="trackingDetails">
+      
   </div>
 </div>
+<div class="modal fade"  id="trackingPictureModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="">
+        <img id="trackingPicture" src="" class="img-fluid" alt="...">
+      </div>
+
+      <div class="modal-footer d-print-none">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+    </div>
+  </div>
+</div>
+</section>
 
 
       <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">

@@ -9,10 +9,16 @@ window.onload = (event) => {
 function render(){
   field = $("#barcodeNumber");
   text = (field.val()).toUpperCase();
+  
   if(text){
     $("#printButton").removeClass("disabled");
     
     if(text.length > 6){
+      if(text.length > 10){
+      $("#trackPackageBtn").removeClass("disabled")
+    }else{
+      $("#trackPackageBtn").addClass("disabled")
+    }
       findBrand(text).then((brand) => {
        if(brand != "-- Server Error --"){
             JsBarcode("#barcode", text, {
@@ -136,9 +142,10 @@ function search(evt) {
   tracking = ($(evt).val()).toUpperCase();
 
   if(tracking.length > 6){
+    
     findBrand(tracking).then((foundBrands) => {
-      console.log(foundBrands);
-      $("#brand").text(foundBrands)
+    console.log(foundBrands);
+    $("#brand").text(foundBrands)
     }).catch((err) => {
       console.log(err);
       $("#brand").text(err)
@@ -174,11 +181,69 @@ function deleteFile(path){
   });
 }
 
+function setTrackingImage(evt) {
+  imageURL = $(evt).attr("imgurl");
+  console.log(imageURL);
+  $("#trackingPicture").attr("src",imageURL);
+}
 
-function getTrackingnIno(trackingNumber){
-  return new Promsise(function (resolve, reject){
-    $.get("https://t.lasership.com/Track/YOURTRACKINGNUMBER/json
-")
+function trackPackage() {
+  let tracking = $("#barcodeNumber").val().trim();
+  if(tracking.length > 10){
+    getTrackingnInfo(tracking).then(function (details) {
+      if(details != 404){
+        console.log(details);
+        let detailsHtml = "";
+        details.forEach(detail => {  
+          detailsHtml = detailsHtml + '<a class="list-group-item list-group-item-action" aria-current="true">'+
+            '<div class="d-flex w-100 justify-content-between">'+
+              '<h6 class="mb-1">'+ detail.EventType +'</h6>'+
+              '<small>'+ new Date(detail.DateTime).toLocaleString() +'</small>'+
+            '</div>';
+          text = "";
+          if(detail.Signature){
+            text = '<p class="mb-1">'+detail.EventLongText+'. | '+ (detail.Location) +': ' + (detail.Signature)+' <span><i onclick="setTrackingImage(this)" data-bs-toggle="modal"'+
+                'data-bs-target="#trackingPictureModal" imgURL="'+detail.SignatureImagePath+'" class="bi bi-camera"></i></span>.</p>';
+          }else if(detail.PhotoPath){
+            text = '<p class="mb-1">'+detail.EventLongText+'. | '+ (detail.Location) +' <span><i onclick="setTrackingImage(this)" data-bs-toggle="modal"'+
+                'data-bs-target="#trackingPictureModal" imgURL="'+detail.PhotoPath+'" class="bi bi-camera"></i></span>.</p>';
+          }else{
+            text = '<p class="mb-1">'+detail.EventLongText+'.</p>';
+          }
+          detailsHtml = detailsHtml + text;
+          
+          // '<p class="mb-1">'+detail.EventLongText+'. | '+ (detail.Location?detail.Location +': ' : '') +'  '(detail.Signature? detail.Signature : '') + ' ' + (detail.SignatureImagePath+ '' : (detail.photo) )+' <span><i class="bi bi-camera"></i></span>.</p>'+
+            
+          detailsHtml = detailsHtml +'<small>'+detail.City +', '+detail.State+', '+detail.PostalCode+'</small>'+
+          '</a>';
+        });
+        $("#trackingDetails").html(detailsHtml);
+      }else{
+        console.log("Didnt find Shit");
+      }
+
+      /** 
+     
+      **/
+    })
+  }
+}
+
+function getTrackingnInfo(trackingNumber){
+  return new Promise(function (resolve, reject){
+    $.get("https://t.lasership.com/Track/"+trackingNumber+"/json", function(details,status){
+      if(details){
+        resolve(details.Events)
+      }else{
+        resolve("ERR: Cant find info")
+      }
+    }).catch((err) =>{
+      if(err.status === 404){
+        resolve(err.status); 
+      }else{
+        console.log("Something Happened");
+      }
+    })
   });
 }
 
