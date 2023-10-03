@@ -95,7 +95,7 @@ app.listen(process.env.PORT || 3035, function () {
   keepAlive();
   clearTempFolder();
   cacheBrands();
-  console.error(outputDate() + " Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
+  console.error(outputDate() + "Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
   // print("./")
 });
 
@@ -140,12 +140,14 @@ async function cacheBrands(){
 }
 
 async function keepAlive(){
-  count = 0;
+  interval = 3600000;
+  count = 1;
+  console.error(outputDate()+"Keep Alive Service Initiated, [Interval: "+ interval/60000+" mins]");
   startDate = new Date(2023,10,03);
   while (startDate.getDate() < 5) {
-    console.log(outputDate() + "Starting a new loop cycle");
+    console.log(outputDate() + "Keep Alive Ping: " + count++);
     await new Promise( function(resolve,reject){
-      setTimeout(resolve, 3600000)//1hr
+      setTimeout(resolve, interval)//1hr
     });
   }
 }
