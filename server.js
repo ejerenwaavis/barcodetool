@@ -92,9 +92,10 @@ app.route(APP_DIRECTORY + "/findBrand/:tracking")
 
 
 app.listen(process.env.PORT || 3035, function () {
+  keepAlive();
   clearTempFolder();
   cacheBrands();
-  console.error("Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
+  console.error(outputDate() + " Barcode is live on port " + ((process.env.PORT) ? process.env.PORT : 3035));
   // print("./")
 });
 
@@ -138,6 +139,23 @@ async function cacheBrands(){
  
 }
 
+async function keepAlive(){
+  count = 0;
+  startDate = new Date(2023,10,03);
+  while (startDate.getDate() < 5) {
+    console.log(outputDate() + "Starting a new loop cycle");
+    await new Promise( function(resolve,reject){
+      setTimeout(resolve, 3600000)//1hr
+    });
+   
+      
+    // await new Promise( resolve => setTimeout(() => {
+    //   console.error(new Date().toLocaleString() + " >> Keep Alive Service Print: " + count)
+    //   }, 3000000); //5Mins
+    // )
+  }
+}
+
 async function clearTempFolder(){
   fs.readdir(tempFilePath, (err, files) => {
   if (err) {
@@ -153,6 +171,10 @@ async function clearTempFolder(){
     }
   }
 });
+}
+
+function outputDate() {
+  return (new Date().toLocaleString()) + " >> ";
 }
 
 function Body(title, error, message) {
