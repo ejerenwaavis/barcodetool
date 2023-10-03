@@ -147,12 +147,6 @@ async function keepAlive(){
     await new Promise( function(resolve,reject){
       setTimeout(resolve, 3600000)//1hr
     });
-   
-      
-    // await new Promise( resolve => setTimeout(() => {
-    //   console.error(new Date().toLocaleString() + " >> Keep Alive Service Print: " + count)
-    //   }, 3000000); //5Mins
-    // )
   }
 }
 
