@@ -3,6 +3,7 @@ const domain = $('#domain').attr('domain');
 window.onload = (event) => {
   $("#barcodeNumber").focus();
   // alert("loaded");
+  checkAndTrack();
   
 };
 
@@ -247,6 +248,16 @@ function getTrackingnInfo(trackingNumber){
   });
 }
 
+
+function checkAndTrack() {
+  tracking = $("#barcodeNumber").val();
+  if(tracking && tracking.length > 6){
+    $("#trackPackageBtn").removeClass("disabled")
+    $("#trackPackageBtn").click();
+    render();
+  }
+}
+
 // function selectStop(evt){
 //   let element = $(evt);
 //   stop = JSON.parse(element.attr("stop"));
@@ -256,3 +267,4 @@ function getTrackingnInfo(trackingNumber){
 //   $($('[firstStop]')).attr("firstStop",""+stop.Street + ", " + stop.City);
 //   $("#optimizeButton").fadeIn("fast").fadeOut("fast").fadeIn("slow");
 // }
+

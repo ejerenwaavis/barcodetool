@@ -67,14 +67,33 @@ var allBrands;
 
 
 /***********************BUSINESS LOGIC ************************************/
-
 app.route(APP_DIRECTORY + "/")
   .get(function (req, res) {
     // print(tempFilePath);
     cacheBrands();
       res.render("home.ejs", {
         body: new Body("Home", "", ""),
+        tracking: null,
       });
+  })
+
+app.route(APP_DIRECTORY + "/track/:tnumber")
+  .get(function (req, res) {
+    // print(tempFilePath);
+    cacheBrands();
+      if(req.params.tnumber){
+        tracking = req.params.tnumber;
+        // console.log(tracking);
+        res.render("home.ejs", {
+          body: new Body("Home", "", ""),
+          tracking: tracking,
+        });
+      }else{
+        res.render("home.ejs", {
+          body: new Body("Home", "", ""),
+          tracking: null,
+        });
+      }
   })
 
 app.route(APP_DIRECTORY + "/findBrand/:tracking")
