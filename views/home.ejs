@@ -20,6 +20,11 @@
                 type="button" role="tab" aria-controls="brand-finder" aria-selected="false">Brand Finder</button>
               <!-- <a class="nav-link" href="#">Link</a> -->
             </li>
+            <li class="nav-item">
+              <button class="nav-link text-reset" id="bulk-task-tab" data-bs-toggle="tab" data-bs-target="#bulk-task"
+                type="button" role="tab" aria-controls="bulk-task" aria-selected="false">Bulk Task</button>
+              <!-- <a class="nav-link" href="#">Link</a> -->
+            </li>
           </ul>
         </div>
       </nav>
@@ -58,47 +63,73 @@
             </div>
           </div>
         </div>
-        <!-- end barcode copy -->
-      </div>
-<section class="" id="trackingInfoDisplay">
-
-<div class="mt-3 py-4 container col-md-8 offset-md-2  text-start" >
-  <div class="list-group placeholder-wave" id="trackingDetails">
-      
-  </div>
-</div>
-<div class="modal fade"  id="trackingPictureModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="">
-        <img id="trackingPicture" src="" class="img-fluid" alt="...">
-      </div>
-
-      <div class="modal-footer d-print-none">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-    </div>
-  </div>
-</div>
-</section>
-
-
-      <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">
-        <div class="container">
-          <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
-
-            <div class="input-group">
-              <span class="input-group-text" id="addon-wrapping">Barcode #</span>
-              <input type="text" oninput="search(this)" class="form-control " style="text-transform:uppercase"
-                placeholder="search for brand" aria-label="tracking" aria-describedby="addon-wrapping">
+        <section class="" id="trackingInfoDisplay">
+        
+          <div class="mt-3 py-4 container col-md-8 offset-md-2  text-start">
+            <div class="list-group placeholder-wave" id="trackingDetails">
+        
             </div>
           </div>
-          <div class="py-3" id="">
-            <p class="" id="brand">
+          <div class="modal fade" id="trackingPictureModal" tabindex="-1" aria-labelledby="exampleModalLabel"
+            aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+              <div class="modal-content">
+                <div class="">
+                  <img id="trackingPicture" src="" class="img-fluid" alt="...">
+                </div>
+        
+                <div class="modal-footer d-print-none">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+              </div>
+            </div>
+        </section>
+        <!-- end barcode copy -->
+      </div>
+    </div>
 
-            </p>
+  
+
+
+    <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">
+      <div class="container">
+        <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+
+          <div class="input-group">
+            <span class="input-group-text" id="addon-wrapping">Barcode #</span>
+            <input type="text" oninput="search(this)" class="form-control " style="text-transform:uppercase"
+              placeholder="search for brand" aria-label="tracking" aria-describedby="addon-wrapping">
+          </div>
+        </div>
+        <div class="py-3" id="">
+          <p class="" id="brand">
+
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="bulk-task" role="tabpanel" aria-labelledby="bulk-task-tab" >
+      <div class="container">
+        <div class="row">
+          <div class="col">
+            <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+              <div class="mb-3">
+                <label for="exampleFormControlTextarea1" class="form-label">Input Barcodes</label>
+                <textarea class="form-control" placeholder="One Entry Per Line as shown below s: &#10'123456789' &#10'123456789, 1234 Bluejay Dr, NW, Atlanta'"  id="barcodesBatchText" rows="10"></textarea>
+              </div>
+              <span onclick="processBatch()" class="btn btn-primary">Display Barcodes</span>
+            </div>
+          </div>
+          <div class="col">
+            <div class="py-3" id="batchBarcodeDisplay">
+              
+            </div>
           </div>
         </div>
       </div>
+    </div>
+    
       <!-- <div class="tab-pane fade" id="nav-contact" role="tabpanel" aria-labelledby="nav-contact-tab" tabindex="0">...</div> -->
       <!-- <div class="tab-pane fade" id="nav-disabled" role="tabpanel" aria-labelledby="nav-disabled-tab" tabindex="0">...</div> -->
     </div>
@@ -175,6 +206,7 @@
 
   <!-- Script -->
   <script src="<%= body.publicFiles %>/../js/barcode.js"></script>
+  <!-- <script src="js/barcode.js"></script> -->
 
   </body>
 

@@ -62,6 +62,47 @@ function render(){
     
 }
 
+async function processBatch(){
+  fieldText = $('#barcodesBatchText').val().toUpperCase();
+  barcodeDisplay = $("#batchBarcodeDisplay");
+  barcodeDisplay.empty();
+  console.log(fieldText);
+
+  const lines = fieldText.split(/\n/);
+  const trackingData = [];
+
+  lines.forEach(line => {
+      const [tracking, ...addressArray] = line.split(/,\s*/);
+      const address = addressArray.join(', ');
+      trackingData.push({ tracking, address });
+  });
+
+  console.log(trackingData);
+  
+  await trackingData.forEach(async element => {
+     
+    if(element.tracking){
+      htmlCanvas = `<canvas class="pb-4 pt-0" id="bbc-${element.tracking}"></canvas>`
+      await barcodeDisplay.append(htmlCanvas);
+      JsBarcode('#bbc-'+element.tracking, index + ' - '+element.tracking, {
+              width:(element.tracking > 14)? 2 : 2.4,
+              font: "Arial",
+              marginTop: 50,
+              height:60,
+              displayValue: true
+            });
+            
+            var canvas = $(`#bbc-${element.tracking}`)[0];
+            const ctx = canvas.getContext("2d");
+            
+            ctx.font = "16px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(element.address ,-100,42);
+            
+    }
+  });
+}
+
 function renderModal(){
   field = $("#barcodeNumber");
   text = (field.val()).toUpperCase();
@@ -254,7 +295,7 @@ function checkAndTrack() {
   if(tracking && tracking.length > 6){
     $("#trackPackageBtn").removeClass("disabled")
     $("#trackPackageBtn").click();
-    render();
+    // render();
   }
 }
 
