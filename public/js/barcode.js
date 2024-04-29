@@ -84,7 +84,7 @@ async function processBatch(){
     if(element.tracking){
       htmlCanvas = `<canvas class="pb-4 pt-0" id="bbc-${element.tracking}"></canvas>`
       await barcodeDisplay.append(htmlCanvas);
-      JsBarcode('#bbc-'+element.tracking, index + ' - '+element.tracking, {
+      JsBarcode('#bbc-'+element.tracking, element.tracking, {
               width:(element.tracking > 14)? 2 : 2.4,
               font: "Arial",
               marginTop: 50,
