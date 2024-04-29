@@ -66,6 +66,7 @@ async function processBatch(){
   fieldText = $('#barcodesBatchText').val().toUpperCase();
   barcodeDisplay = $("#batchBarcodeDisplay");
   barcodeDisplay.empty();
+  count = 0;
   console.log(fieldText);
 
   const lines = fieldText.split(/\n/);
@@ -78,11 +79,11 @@ async function processBatch(){
   });
 
   console.log(trackingData);
-  
   await trackingData.forEach(async element => {
      
     if(element.tracking){
-      htmlCanvas = `<canvas class="pb-4 pt-0" id="bbc-${element.tracking}"></canvas>`
+      count = count+1;
+      htmlCanvas = `<p class="pt-3 mt-2 mb-0 pb-0">${count}</p><br><canvas class="pb-5 " id="bbc-${element.tracking}"></canvas> <hr>`
       await barcodeDisplay.append(htmlCanvas);
       JsBarcode('#bbc-'+element.tracking, element.tracking, {
               width:(element.tracking > 14)? 2 : 2.4,
