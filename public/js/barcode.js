@@ -3,8 +3,13 @@ const domain = $('#domain').attr('domain');
 window.onload = (event) => {
   $("#barcodeNumber").focus();
   // alert("loaded");
+  $('#delimeterText').blur(function() {
+    $(this).addClass('collapsed');
+  });
+  $('#delimeterText').focus(function() {
+    $(this).removeClass('collapsed');
+  });
   checkAndTrack();
-  
 };
 
 function render(){
@@ -16,10 +21,10 @@ function render(){
     
     if(text.length > 6){
       if(text.length > 10){
-      $("#trackPackageBtn").removeClass("disabled")
-    }else{
-      $("#trackPackageBtn").addClass("disabled")
-    }
+        $("#trackPackageBtn").removeClass("disabled")
+      }else{
+        $("#trackPackageBtn").addClass("disabled")
+      }
       findBrand(text).then((brand) => {
        if(brand != "-- Server Error --"){
             JsBarcode("#barcode", text, {
@@ -102,6 +107,26 @@ async function processBatch(){
             
     }
   });
+}
+
+async function processDelimeter() {
+  $('#delimeterText')
+  var input = $('#delimeterText').val().trim();
+  var lines = input.split('\n');
+  var output = '';
+
+  lines.forEach(function(line) {
+    if(line){
+      var parts = line.split(' - ');
+      var name = parts[0].trim();
+      var zipCodes = parts[1].trim().split(/\s+/).join('\n');
+      var score = parts[2].trim();
+      
+      output += name + ' - ' + score + '\n' + zipCodes + '\n\n';
+    }
+  });
+
+  $('#outputText').text(output.trim());
 }
 
 function renderModal(){
@@ -296,7 +321,7 @@ function checkAndTrack() {
   if(tracking && tracking.length > 6){
     $("#trackPackageBtn").removeClass("disabled")
     $("#trackPackageBtn").click();
-    // render();
+    render();
   }
 }
 
