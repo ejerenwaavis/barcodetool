@@ -1,8 +1,42 @@
 const domain = $('#domain').attr('domain');
+const brandLookupCache = new Map();
+
+function debounce(fn, wait) {
+  let timeoutId;
+  return function () {
+    const args = arguments;
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(function () {
+      fn.apply(null, args);
+    }, wait);
+  };
+}
+
+function drawCanvasLabel(canvasSelector, label, x, y, font) {
+  const canvas = $(canvasSelector)[0];
+  if (!canvas) {
+    return;
+  }
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, 48);
+  ctx.font = font;
+  ctx.textAlign = "center";
+  ctx.fillText(label, x, y);
+}
 
 window.onload = (event) => {
   $("#barcodeNumber").focus();
-  // alert("loaded");
+  const debouncedRender = debounce(render, 180);
+  const debouncedSearch = debounce(function (evt) {
+    search(evt.target);
+  }, 220);
+
+  $("#barcodeNumber").on("input", debouncedRender);
+  $("#brandFinderInput").on("input", debouncedSearch);
+  $("#barcodeDescription").on("input", function () {
+    transferDescription(this);
+  });
+
   $('#delimeterText').blur(function() {
     $(this).addClass('collapsed');
   });
@@ -13,8 +47,8 @@ window.onload = (event) => {
 };
 
 function render(){
-  field = $("#barcodeNumber");
-  text = (field.val()).toUpperCase();
+  const field = $("#barcodeNumber");
+  const text = (field.val()).toUpperCase().trim();
   
   if(text){
     $("#printButton").removeClass("disabled");
@@ -36,12 +70,7 @@ function render(){
             });
 
             $("#barcodeBrand").val(brand);
-            var canvas = $("#barcode")[0];
-            const ctx = canvas.getContext("2d");
-          
-            ctx.font = "16px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(brand ,-100,42);
+            drawCanvasLabel("#barcode", brand, -100, 42, "16px Arial");
             
         }else{
           JsBarcode("#barcode", text, {
@@ -68,10 +97,10 @@ function render(){
 }
 
 async function processBatch(){
-  fieldText = $('#barcodesBatchText').val().toUpperCase();
-  barcodeDisplay = $("#batchBarcodeDisplay");
+  const fieldText = $('#barcodesBatchText').val().toUpperCase();
+  const barcodeDisplay = $("#batchBarcodeDisplay");
   barcodeDisplay.empty();
-  count = 0;
+  let count = 0;
   console.log(fieldText);
 
   const lines = fieldText.split(/\n/);
@@ -84,29 +113,28 @@ async function processBatch(){
   });
 
   console.log(trackingData);
-  await trackingData.forEach(async element => {
-     
+  const html = [];
+  for (const element of trackingData) {
     if(element.tracking){
-      count = count+1;
-      htmlCanvas = `<p class="pt-3 mt-2 mb-0 pb-0">${count}</p><br><canvas class="pb-5 " id="bbc-${element.tracking}"></canvas> <hr>`
-      await barcodeDisplay.append(htmlCanvas);
-      JsBarcode('#bbc-'+element.tracking, element.tracking, {
-              width:(element.tracking > 14)? 2 : 2.4,
-              font: "Arial",
-              marginTop: 50,
-              height:60,
-              displayValue: true
-            });
-            
-            var canvas = $(`#bbc-${element.tracking}`)[0];
-            const ctx = canvas.getContext("2d");
-            
-            ctx.font = "16px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText(element.address ,-100,42);
-            
+      count = count + 1;
+      html.push(`<p class="pt-3 mt-2 mb-0 pb-0">${count}</p><br><canvas class="pb-5" id="bbc-${element.tracking}"></canvas><hr>`);
     }
-  });
+  }
+
+  barcodeDisplay.html(html.join(""));
+
+  for (const element of trackingData) {
+    if (element.tracking) {
+      JsBarcode('#bbc-'+element.tracking, element.tracking, {
+        width:(element.tracking.length > 14)? 2 : 2.4,
+        font: "Arial",
+        marginTop: 50,
+        height:60,
+        displayValue: true
+      });
+      drawCanvasLabel(`#bbc-${element.tracking}`, element.address, -100, 42, "16px Arial");
+    }
+  }
 }
 
 async function processDelimeter() {
@@ -130,9 +158,9 @@ async function processDelimeter() {
 }
 
 function renderModal(){
-  field = $("#barcodeNumber");
-  text = (field.val()).toUpperCase();
-  brand = $("#barcodeBrand").val();
+  const field = $("#barcodeNumber");
+  const text = (field.val()).toUpperCase().trim();
+  const brand = $("#barcodeBrand").val();
   
   if(text){
     $("#printButton").removeClass("disabled");
@@ -145,12 +173,7 @@ function renderModal(){
     });
     // if(text.length > 6){
       $("#barcodeBrand").val(brand);
-      var canvas = $("#barcodeModal")[0];
-      const ctx = canvas.getContext("2d");
-    
-      ctx.font = "14px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(brand ,-100,42);
+      drawCanvasLabel("#barcodeModal", brand, -100, 42, "14px Arial");
       
   }else{
     $("#printButton").addClass("disabled");
@@ -207,7 +230,7 @@ function downloadImage() {
 };
 
 function search(evt) {
-  tracking = ($(evt).val()).toUpperCase();
+  const tracking = ($(evt).val()).toUpperCase();
 
   if(tracking.length > 6){
     
@@ -223,11 +246,19 @@ function search(evt) {
 
 function findBrand(barcode){
   return new Promise(function (resolve, reject){
+      const prefix = barcode.substring(0, 7);
+      if (brandLookupCache.has(prefix)) {
+        resolve(brandLookupCache.get(prefix));
+        return;
+      }
+
       $.get(domain + "/findBrand/"+barcode, function (data,status) {
         if(data){
           if(data.length > 0){
+            brandLookupCache.set(prefix, data[0]._id);
             resolve(data[0]._id);
           }else{
+            brandLookupCache.set(prefix, "#- UNREGITERED BRAND -#");
             resolve("#- UNREGITERED BRAND -#");
           }
         }else{
@@ -250,7 +281,7 @@ function deleteFile(path){
 }
 
 function setTrackingImage(evt) {
-  imageURL = $(evt).attr("imgurl");
+  const imageURL = $(evt).attr("imgurl");
   console.log(imageURL);
   $("#trackingPicture").attr("src",imageURL);
 }
@@ -317,7 +348,7 @@ function getTrackingnInfo(trackingNumber){
 
 
 function checkAndTrack() {
-  tracking = $("#barcodeNumber").val();
+  const tracking = $("#barcodeNumber").val();
   if(tracking && tracking.length > 6){
     $("#trackPackageBtn").removeClass("disabled")
     $("#trackPackageBtn").click();

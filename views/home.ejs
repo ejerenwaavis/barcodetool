@@ -1,15 +1,15 @@
 <%- include("partials/header.ejs")%>
 
 
-  <main class="form-signin" id="originalDoc">
+  <main class="form-signin app-shell" id="originalDoc">
     <!-- <form id="fileUpload" action="<%= body.domain %>/fileUpload" method="post" enctype="multipart/form-data"> -->
     <!-- <img class="mb-4" src="/docs/5.0/assets/brand/bootstrap-logo.svg" alt="" width="72" height="57"> -->
 
-    <div class="container py-5 d-print-none">
+    <div class="container py-5 d-print-none app-header-block">
 
       <nav>
         <div class="nav-tabs " id="nav-tab" role="tablist">
-          <ul class="nav justify-content-center">
+          <ul class="nav justify-content-center app-tabs">
             <li class="nav-item">
               <button class="nav-link active text-reset" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate"
                 type="button" role="tab" aria-controls="generate" aria-selected="true">Generate</button>
@@ -43,14 +43,14 @@
         <div class="container">
           <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
 
-            <div class="input-group d-print-none">
+            <div class="input-group d-print-none app-input-group">
               <span class="input-group-text" id="addon-wrapping">Barcode #</span>
-              <input type="text" oninput="render(this)" id="barcodeNumber" style="text-transform:uppercase"
+              <input type="text" id="barcodeNumber" style="text-transform:uppercase"
                 class="form-control" value="<%= (tracking ? tracking : '') %>" placeholder="start typing to reveal barcode" aria-label="tracking"
                 aria-describedby="addon-wrapping">
                 <button onclick="trackPackage()" id="trackPackageBtn"  class="disabled btn btn-accent">Track</button>
             </div>
-            <input disabled type="text" onchange="renderModal(this)" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
+            <input disabled type="text" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
               placeholder="Brand Name" >
 
           <div class=" row p-0  m-auto text-center container d-print-none pt-4" id="printArea">
@@ -102,7 +102,7 @@
 
           <div class="input-group">
             <span class="input-group-text" id="addon-wrapping">Barcode #</span>
-            <input type="text" oninput="search(this)" class="form-control " style="text-transform:uppercase"
+            <input type="text" id="brandFinderInput" class="form-control " style="text-transform:uppercase"
               placeholder="search for brand" aria-label="tracking" aria-describedby="addon-wrapping">
           </div>
         </div>
@@ -118,7 +118,7 @@
       <div class="container">
         <div class="row">
           <div class="col">
-            <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+            <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card">
               <div class="mb-3">
                 <label for="exampleFormControlTextarea1" class="form-label">Input Barcodes</label>
                 <textarea class="form-control" placeholder="One Entry Per Line as shown below s: &#10'123456789' &#10'123456789, 1234 Bluejay Dr, NW, Atlanta'"  id="barcodesBatchText" rows="10"></textarea>
@@ -140,7 +140,7 @@
       <div class="container">
         <div class="row">
           <div class="col">
-            <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2">
+            <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card">
               <div class="mb-3">
                 <label for="exampleFormControlTextarea1" class="form-label">Input Text</label>
                 <textarea class="form-control"
@@ -181,8 +181,7 @@
 
           <div class="modal-body text-center container">
             <!-- Visible NameField -->
-            <input type="text" id="barcodeDescription" onchange="transferDescription(this)"
-              onkeyup="transferDescription(this)" class="form-control d-print-none text-center"
+            <input type="text" id="barcodeDescription" class="form-control d-print-none text-center"
               placeholder="Type a description to help iddentify the barcode" aria-label="Username"
               aria-describedby="basic-addon1">
               <!-- Canvas -->
@@ -192,8 +191,7 @@
           </div>
 
           <div class="py-3 text-muted d-none d-print-block ">
-            <p class="mt-5 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED Devops 2020 | Triumph Courier
-              Services</p>
+            <p class="mt-5 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED DevOps</p>
             </p>
           </div>
 
@@ -214,10 +212,9 @@
 
     <!-- Button trigger modal -->
 
-    <div class="fixed-bottom bg-light text-muted d-print-none">
+    <div class="fixed-bottom bg-light text-muted d-print-none app-footer">
 
-      <p class="mt-3 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED Devops 2020 | Triumph Courier
-        Services</p>
+      <p class="mt-3 mb-3 text-muted"><strong>&copy; Barcode</strong> by ACED DevOps</p>
       </p>
     </div>
 
@@ -227,14 +224,12 @@
 
 
   <!-- JavaScript Bundle with Popper -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js"
-    integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0"
-    crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"></script>
   <!-- jQuery -->
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
 
   <!-- Script -->
-  <script src="<%= body.publicFiles %>/../js/barcode.js"></script>
+  <script defer src="<%= body.domain %>/dist/js/barcode.js"></script>
   <!-- <script src="js/barcode.js"></script> -->
 
   </body>

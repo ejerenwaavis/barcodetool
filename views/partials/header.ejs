@@ -8,11 +8,14 @@
   <meta name="author" content="ACED Devops">
   <meta name="generator" content="Jekyll v4.1.1">
   <title>
-    <%= body.title %> · BarcodeTool - TCS
+    <%= body.title %> · BarcodeTool - ACED DevOps
   </title>
 
   <!-- Favicon -->
-  <link rel="icon" href="https://triumphcourier.com/img/Logo-SVG.svg">
+  <link rel="icon" href="<%= body.domain %>/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 
   <style>
@@ -49,16 +52,14 @@
   <script src="https://kit.fontawesome.com/5f30a8a83b.js" crossorigin="anonymous"></script>
 
   <!-- Barcode JS -->
-  <script src="https://cdn.jsdelivr.net/jsbarcode/3.3.20/JsBarcode.all.min.js"></script>
-  <!-- Global Custom styles for Triumph Courier -->
-  <link href="<%= body.publicFiles %>/css/style.css" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/jsbarcode/3.3.20/JsBarcode.all.min.js"></script>
   
   <!-- Custom styles for this template -->
-  <!-- <link href="<%= body.publicFolder %>css/barcode.css" rel="stylesheet"> -->
+  <link href="<%= body.domain %>/dist/css/barcode.css" rel="stylesheet">
   
 </head>
 
-<body class="text-center">
+<body class="text-center" style="font-family:'Barlow','Segoe UI','Trebuchet MS',sans-serif;">
 
   
   

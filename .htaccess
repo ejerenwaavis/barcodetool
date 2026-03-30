@@ -1,0 +1,14 @@
+# ACED DevOps barcode app - safe defaults for Apache-based hosts.
+Options -Indexes
+
+<IfModule mod_headers.c>
+  # Cache immutable dist assets aggressively.
+  <FilesMatch "\.(css|js|svg|png|jpg|jpeg|gif|webp|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# NOTE:
+# This app is primarily served by Node/Express.
+# Keep rewrite/proxy rules managed by your host's Node/Passenger setup.
+# Avoid forcing generic RewriteRule proxies here unless your host requires them.

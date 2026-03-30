@@ -1,9 +1,24 @@
+:root {
+  --bg-page: linear-gradient(180deg, #eef3f9 0%, #dfe8f4 100%);
+  --bg-surface: #ffffff;
+  --text-main: #1b2a41;
+  --text-subtle: #516179;
+  --border-soft: #d0d9e6;
+  --brand: #1f5fbf;
+  --brand-strong: #154a97;
+  --danger: #b42318;
+  --shadow-soft: 0 12px 30px rgba(18, 42, 76, 0.1);
+}
+
 body {
-  background: #ddd;
+  background: var(--bg-page);
+  color: var(--text-main);
   text-align: center;
   margin: 0;
   padding: 0;
   width: 100%;
+  min-height: 100vh;
+  font-family: "Segoe UI", "Trebuchet MS", "Helvetica Neue", sans-serif;
 }
 
 html {
@@ -13,11 +28,11 @@ html {
 }
 
 #main {
-  background: #fff;
+  background: var(--bg-surface);
   margin: 0 auto;
   -moz-border-radius: 5px;
   border-radius: 5px;
-  box-shadow: 0 1px 2px hsla(0, 0%, 0%, 0.3);
+  box-shadow: var(--shadow-soft);
   margin-top: 25px;
   margin-bottom: 50px;
   min-width: 768px;
@@ -29,6 +44,60 @@ html {
 .container {
   width: 750px;
   text-align: left;
+}
+
+.app-shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding-bottom: 6rem;
+}
+
+.app-header-block {
+  padding-top: 2.75rem;
+}
+
+.app-tabs .nav-link {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--text-subtle);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.75rem 1rem;
+}
+
+.app-tabs .nav-link.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  background: transparent;
+}
+
+.app-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-soft);
+  padding: 1rem;
+}
+
+.app-input-group .input-group-text {
+  background: #f2f6fc;
+  color: var(--text-subtle);
+  border: 1px solid var(--border-soft);
+}
+
+.app-input-group .form-control {
+  border: 1px solid var(--border-soft);
+}
+
+.app-input-group .form-control:focus {
+  border-color: #87aee5;
+  box-shadow: 0 0 0 0.2rem rgba(31, 95, 191, 0.12);
+}
+
+.app-footer {
+  border-top: 1px solid #dbe5f2;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(4px);
 }
 
 @media (max-width: 800px) {
@@ -47,6 +116,15 @@ html {
 
   .container {
     width: 100%;
+  }
+
+  .app-shell {
+    padding: 0 0.4rem 5rem;
+  }
+
+  .app-tabs .nav-link {
+    padding: 0.5rem 0.65rem;
+    font-size: 0.92rem;
   }
 
   .github-banner {
@@ -92,7 +170,7 @@ html {
 
 #invalid {
   display: none;
-  color: #DE0000;
+  color: var(--danger);
   margin-top: 10px;
   font-size: 14pt;
   vertical-align: middle;
