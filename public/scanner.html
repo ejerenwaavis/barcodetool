@@ -101,8 +101,17 @@
 <div id="toast"></div>
 
 <main>
-  <div class="controls">
-    <button id="toggleBtn" style="display:none;">Pause</button>
+  <div class="controls" style="align-items: center; width: 100%;">
+    <div style="display:flex; gap:8px; align-items:center; flex:1;">
+      <select id="carrierFilter" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13.5px;font-weight:500;outline:none;max-width:180px;">
+        <option value="general">All Supported Carriers</option>
+        <option value="ontrac">OnTrac / LaserShip</option>
+        <option value="speedx">SpeedX</option>
+        <option value="gopro">GoPro</option>
+        <option value="any">Allow Abnormal (Any)</option>
+      </select>
+      <button id="toggleBtn" style="display:none; padding:8px 12px;">Pause</button>
+    </div>
     <label class="small"><input type="checkbox" id="dupToggle"> Allow duplicate lines</label>
   </div>
 
@@ -129,6 +138,7 @@
   const permHelp = document.getElementById('permHelp');
   const startBtn = document.getElementById('startBtn');
   const toggleBtn = document.getElementById('toggleBtn');
+  const carrierFilter = document.getElementById('carrierFilter');
   const output = document.getElementById('output');
   const toast = document.getElementById('toast');
   const uniqueCountEl = document.getElementById('uniqueCount');
@@ -177,6 +187,30 @@
     if (value.includes('|')) {
       value = value.split('|')[0];
     }
+
+    // Apply carrier filtering rules
+    const filter = carrierFilter.value;
+    let isValid = false;
+    let valUpper = value.toUpperCase();
+
+    const isOnTrac = (valUpper.startsWith('1LS') || valUpper.startsWith('D100') || valUpper.startsWith('C12')) && value.length >= 10;
+    const isSpeedX = valUpper.startsWith('SPX') && value.length >= 9;
+    const isGoPro = (valUpper.startsWith('D') || valUpper.startsWith('GF')) && value.length >= 9;
+
+    if (filter === 'any') {
+      isValid = true;
+    } else if (filter === 'ontrac') {
+      isValid = isOnTrac;
+    } else if (filter === 'speedx') {
+      isValid = isSpeedX;
+    } else if (filter === 'gopro') {
+      isValid = isGoPro;
+    } else if (filter === 'general') {
+      // General catches anything >= 9 characters, filtering out random tiny barcodes
+      isValid = value.length >= 9;
+    }
+
+    if (!isValid) return; // ignore codes that don't match the current filter
     
     totalScans++;
     const now = Date.now();
