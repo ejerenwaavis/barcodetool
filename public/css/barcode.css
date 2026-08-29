@@ -1,236 +1,432 @@
+/* ==========================================================================
+   ACED Barcode — Design System
+   ========================================================================== */
+
 :root {
-  --bg-page: linear-gradient(180deg, #eef3f9 0%, #dfe8f4 100%);
-  --bg-surface: #ffffff;
-  --text-main: #1b2a41;
-  --text-subtle: #516179;
-  --border-soft: #d0d9e6;
-  --brand: #1f5fbf;
-  --brand-strong: #154a97;
-  --danger: #b42318;
-  --shadow-soft: 0 12px 30px rgba(18, 42, 76, 0.1);
+  --bg: #f3f5fa;
+  --bg-alt: #eceef7;
+  --surface: #ffffff;
+  --surface-2: #f7f8fc;
+  --border: #e3e6f0;
+  --border-strong: #ccd2e4;
+  --text: #171d33;
+  --text-sub: #5c6479;
+  --text-faint: #8b93a8;
+
+  --accent: #2f5fdb;
+  --accent-strong: #1f45ab;
+  --accent-soft: #e8edfc;
+
+  --success: #1f9d63;
+  --success-soft: #e4f7ee;
+  --warn: #b8790a;
+  --warn-soft: #fdf3df;
+  --danger: #c8362a;
+  --danger-soft: #fbe9e7;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(17, 24, 54, .05), 0 1px 1px rgba(17, 24, 54, .04);
+  --shadow-md: 0 10px 26px rgba(17, 24, 54, .08);
+  --shadow-lg: 0 22px 54px rgba(17, 24, 54, .14);
+
+  --font: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
+* { box-sizing: border-box; }
+
+html { margin: 0; padding: 0; width: 100%; }
+
 body {
-  background: var(--bg-page);
-  color: var(--text-main);
-  text-align: center;
+  background: var(--bg);
+  background-image: radial-gradient(circle at 12% 0%, rgba(47,95,219,.05), transparent 42%),
+                     radial-gradient(circle at 88% 8%, rgba(47,95,219,.04), transparent 40%);
+  color: var(--text);
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100vh;
-  font-family: "Segoe UI", "Trebuchet MS", "Helvetica Neue", sans-serif;
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
 }
 
-html {
-  margin: 0;
-  padding: 0;
-  width: 100%;
+/* -------------------------------------------------- top bar -------------------------------------------------- */
+
+nav.navbar-dark.bg-dark {
+  background: #12162a !important;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
 }
 
-#main {
-  background: var(--bg-surface);
-  margin: 0 auto;
-  -moz-border-radius: 5px;
-  border-radius: 5px;
-  box-shadow: var(--shadow-soft);
-  margin-top: 25px;
-  margin-bottom: 50px;
-  min-width: 768px;
-  padding-bottom: 20px;
-  padding-top: 10px;
-  display: inline-block;
+.navbar-brand {
+  font-family: var(--font);
+  font-weight: 700;
+  letter-spacing: .01em;
+  font-size: 1.15rem;
+  color: #fff !important;
 }
 
-.container {
-  width: 750px;
-  text-align: left;
-}
+/* -------------------------------------------------- shell / layout -------------------------------------------------- */
 
 .app-shell {
-  max-width: 1040px;
+  max-width: 1080px;
   margin: 0 auto;
   padding-bottom: 6rem;
 }
 
-.app-header-block {
-  padding-top: 2.75rem;
+.container { width: 750px; text-align: left; }
+
+.app-header-block { padding-top: 2.5rem; }
+
+/* -------------------------------------------------- tabs (segmented control) -------------------------------------------------- */
+
+.app-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  justify-content: center;
 }
 
 .app-tabs .nav-link {
   border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--text-subtle);
+  border-radius: var(--radius-pill);
+  padding: .6rem 1.15rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 0.75rem 1rem;
+  font-size: .92rem;
+  letter-spacing: .01em;
+  color: var(--text-sub);
+  background: transparent;
+  transition: all .16s ease;
+  white-space: nowrap;
+}
+
+.app-tabs .nav-link:hover:not(.active) {
+  color: var(--text);
+  background: rgba(23, 29, 51, .045);
 }
 
 .app-tabs .nav-link.active {
-  color: var(--brand);
-  border-bottom-color: var(--brand);
-  background: transparent;
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 6px 16px rgba(47, 95, 219, .32);
 }
+
+/* -------------------------------------------------- cards -------------------------------------------------- */
 
 .app-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-soft);
-  border-radius: 0.75rem;
-  box-shadow: var(--shadow-soft);
-  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem;
 }
 
+.tab-pane { padding-top: .5rem; }
+
+.form-label {
+  font-weight: 600;
+  font-size: .82rem;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: .5rem;
+}
+
+/* -------------------------------------------------- inputs -------------------------------------------------- */
+
 .app-input-group .input-group-text {
-  background: #f2f6fc;
-  color: var(--text-subtle);
-  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text-sub);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md) 0 0 var(--radius-md) !important;
+  font-weight: 600;
+  font-size: .85rem;
 }
 
 .app-input-group .form-control {
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--border-strong);
+  font-family: var(--mono);
+  font-size: .95rem;
+  letter-spacing: .02em;
 }
 
-.app-input-group .form-control:focus {
-  border-color: #87aee5;
-  box-shadow: 0 0 0 0.2rem rgba(31, 95, 191, 0.12);
+.app-input-group .btn { border-radius: 0 var(--radius-md) var(--radius-md) 0 !important; }
+
+.form-control {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: .65rem .9rem;
+  background: var(--surface);
+  color: var(--text);
 }
+
+.form-control:focus,
+.app-input-group .form-control:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 .2rem var(--accent-soft);
+}
+
+.form-control::placeholder { color: var(--text-faint); }
+
+textarea.form-control {
+  font-family: var(--mono);
+  font-size: .88rem;
+  line-height: 1.55;
+}
+
+/* -------------------------------------------------- buttons -------------------------------------------------- */
+
+.btn { border-radius: var(--radius-pill); font-weight: 600; letter-spacing: .01em; padding: .55rem 1.3rem; }
+
+.btn-primary,
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(47, 95, 219, .25);
+}
+
+.btn-primary:hover, .btn-primary:focus,
+.btn-accent:hover, .btn-accent:focus {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #fff;
+}
+
+.btn-outline-accent {
+  background: transparent;
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+}
+
+.btn-outline-accent:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: var(--accent-strong);
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text-sub);
+}
+
+.btn-secondary:hover { background: var(--border); color: var(--text); }
+
+.btn.disabled, .btn:disabled { opacity: .38; box-shadow: none; }
+
+.btn-sm { padding: .42rem .95rem; font-size: .82rem; }
+
+/* -------------------------------------------------- barcode display -------------------------------------------------- */
+
+#printArea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem 1rem 1.25rem;
+  margin: 0 auto;
+}
+
+#barcode { vertical-align: middle; max-width: 100%; }
+
+/* -------------------------------------------------- brand finder -------------------------------------------------- */
+
+#brand {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid rgba(47, 95, 219, .18);
+  border-radius: var(--radius-md);
+  padding: .85rem 1.1rem;
+  min-height: 1.2em;
+}
+
+#brand:empty { display: none; }
+
+/* -------------------------------------------------- bulk task label grid -------------------------------------------------- */
+
+.label-toolbar {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.label-count {
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+
+#batchBarcodeDisplay {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.label-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 12px 10px;
+  text-align: center;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.label-card .label-index {
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 0 0 4px;
+}
+
+.label-card canvas { max-width: 100%; }
+
+.label-empty {
+  color: var(--text-faint);
+  font-size: .9rem;
+  padding: 2rem 0;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+/* -------------------------------------------------- delimeter -------------------------------------------------- */
+
+#outputText {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.25rem;
+  font-family: var(--mono);
+  font-size: .88rem;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  margin-top: 1.25rem;
+  min-height: 3em;
+}
+
+#outputText:empty::before {
+  content: "Reformatted routes will appear here.";
+  color: var(--text-faint);
+  font-family: var(--font);
+}
+
+/* -------------------------------------------------- tracking results -------------------------------------------------- */
+
+#trackingDetails .list-group-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md) !important;
+  margin-bottom: 8px;
+  padding: .9rem 1.1rem;
+}
+
+#trackingDetails .list-group-item h6 { color: var(--text); font-weight: 700; }
+#trackingDetails .list-group-item small { color: var(--text-faint); }
+#trackingDetails .list-group-item p { color: var(--text-sub); margin-bottom: .35rem; }
+
+/* -------------------------------------------------- toast -------------------------------------------------- */
+
+#appToast {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  transform: translate(-50%, -140%);
+  background: var(--success);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13.5px;
+  padding: 11px 20px;
+  border-radius: var(--radius-pill);
+  z-index: 2000;
+  transition: transform .28s cubic-bezier(.175, .885, .32, 1.275);
+  box-shadow: var(--shadow-lg);
+  max-width: 88vw;
+  text-align: center;
+}
+
+#appToast.show { transform: translate(-50%, 0); }
+#appToast.warn { background: var(--warn); }
+#appToast.err { background: var(--danger); }
+
+/* -------------------------------------------------- footer -------------------------------------------------- */
 
 .app-footer {
-  border-top: 1px solid #dbe5f2;
-  background: rgba(255, 255, 255, 0.94) !important;
-  backdrop-filter: blur(4px);
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, .92) !important;
+  backdrop-filter: blur(6px);
 }
+
+.app-footer p { color: var(--text-faint) !important; font-size: .85rem; }
+
+/* -------------------------------------------------- print -------------------------------------------------- */
+
+@media print {
+  body { background: #fff !important; }
+  .d-print-none { display: none !important; }
+  #batchBarcodeDisplay { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .label-card { box-shadow: none; border: 1px solid #ccc; }
+  .app-shell { padding-bottom: 0; }
+}
+
+/* -------------------------------------------------- responsive -------------------------------------------------- */
 
 @media (max-width: 800px) {
-  #main {
-    margin-top: 0;
-    margin-bottom: 0;
-    margin-left: 0;
-    margin-right: 0;
-    padding-left: 10px;
-    padding-right: 10px;
-    -moz-border-radius: 0px;
-    border-radius: 0px;
-    width: 100%;
-    min-width: 0px;
-  }
+  .container { width: 100%; }
 
-  .container {
-    width: 100%;
-  }
+  .app-shell { padding: 0 .9rem 5rem; }
 
-  .app-shell {
-    padding: 0 0.4rem 5rem;
-  }
+  .app-header-block { padding-top: 1.5rem; }
 
-  .app-tabs .nav-link {
-    padding: 0.5rem 0.65rem;
-    font-size: 0.92rem;
-  }
+  .app-tabs { padding: 5px; gap: 3px; }
 
-  .github-banner {
-    display: none;
-  }
+  .app-tabs .nav-link { padding: .5rem .8rem; font-size: .86rem; }
+
+  .app-card { padding: 1.25rem 1.1rem; border-radius: var(--radius-md); }
+
+  #batchBarcodeDisplay { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 
-#userInput {
-  height: 35px;
+/* -------------------------------------------------- modal -------------------------------------------------- */
+
+.modal-content {
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
-#barcode {
-  vertical-align: middle;
+.modal-header { border-bottom: 1px solid var(--border); }
+.modal-footer { border-top: 1px solid var(--border); }
+.modal-title { font-weight: 700; }
+
+/* -------------------------------------------------- scanner iframe frame -------------------------------------------------- */
+
+#scanner iframe {
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-#title {
-  display: inline-block;
-  margin-left: auto;
-  margin-right: auto;
-  text-align: left;
-  line-height: 90%;
-}
+/* -------------------------------------------------- legacy hooks kept for compatibility -------------------------------------------------- */
 
-#title a:link {
-  text-decoration: none;
-  color: #000;
-}
-
-#title a:visited {
-  text-decoration: none;
-  color: #000;
-}
-
-#title a:hover {
-  text-decoration: underline;
-  color: #000;
-}
-
-#title a:active {
-  text-decoration: underline;
-  color: #000;
-}
-
-#invalid {
-  display: none;
-  color: var(--danger);
-  margin-top: 10px;
-  font-size: 14pt;
-  vertical-align: middle;
-}
-
-#barcodeType {
-  height: 35px;
-}
-
-.barcode-container {
-  height: 200px;
-  line-height: 200px;
-  text-align: center;
-  vertical-align: middle;
-  margin-left: 25px;
-  margin-right: 25px;
-}
-
-.description-text {
-  height: 42px;
-}
-
-.description-text p {
-  position: relative;
-  top: 50%;
-  -webkit-transform: translateY(-50%);
-  -ms-transform: translateY(-50%);
-  transform: translateY(-50%);
-}
-
-.value-text {
-  height: 42px;
-  text-align: right;
-}
-
-.value-text p {
-  position: relative;
-  top: 50%;
-  -webkit-transform: translateY(-50%);
-  -ms-transform: translateY(-50%);
-  transform: translateY(-50%);
-}
-
-.center-text {
-  text-align: center;
-}
-
-.search-bar {
-  margin-bottom: 20px;
-}
-
-.slider-container {
-  margin-top: 17px;
-}
-
-.input-container {
-  margin-top: 5px;
-}
-
-.barcode-select {
-  border-color: #ccc;
-}
-
+#title { display: inline-block; margin: 0 auto; text-align: left; line-height: 90%; }
+#title a:link, #title a:visited { text-decoration: none; color: #000; }
+#title a:hover, #title a:active { text-decoration: underline; color: #000; }
+#invalid { display: none; color: var(--danger); margin-top: 10px; font-size: 14pt; }
+.barcode-container { height: 200px; line-height: 200px; text-align: center; margin: 0 25px; }
+.center-text { text-align: center; }

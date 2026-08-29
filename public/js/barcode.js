@@ -101,7 +101,6 @@ async function processBatch(){
   const barcodeDisplay = $("#batchBarcodeDisplay");
   barcodeDisplay.empty();
   let count = 0;
-  console.log(fieldText);
 
   const lines = fieldText.split(/\n/);
   const trackingData = [];
@@ -109,36 +108,99 @@ async function processBatch(){
   lines.forEach(line => {
       const [tracking, ...addressArray] = line.split(/,\s*/);
       const address = addressArray.join(', ');
-      trackingData.push({ tracking, address });
+      trackingData.push({ tracking: (tracking || "").trim(), address });
   });
 
-  console.log(trackingData);
   const html = [];
   for (const element of trackingData) {
     if(element.tracking){
       count = count + 1;
-      html.push(`<p class="pt-3 mt-2 mb-0 pb-0">${count}</p><br><canvas class="pb-5" id="bbc-${element.tracking}"></canvas><hr>`);
+      html.push(`<div class="label-card"><p class="label-index">Label ${count}</p><canvas id="bbc-${element.tracking}-${count}"></canvas></div>`);
     }
+  }
+
+  if (!count){
+    barcodeDisplay.html('<p class="label-empty">No valid entries found. Add one barcode per line.</p>');
+    $("#bulkPrintBtn").addClass("disabled");
+    $("#bulkPdfBtn").addClass("disabled");
+    $("#bulkLabelCount").text("");
+    return;
   }
 
   barcodeDisplay.html(html.join(""));
 
+  let i = 0;
   for (const element of trackingData) {
     if (element.tracking) {
-      JsBarcode('#bbc-'+element.tracking, element.tracking, {
+      i++;
+      const canvasSel = `#bbc-${element.tracking}-${i}`;
+      JsBarcode(canvasSel, element.tracking, {
         width:(element.tracking.length > 14)? 2 : 2.4,
         font: "Arial",
         marginTop: 50,
         height:60,
         displayValue: true
       });
-      drawCanvasLabel(`#bbc-${element.tracking}`, element.address, -100, 42, "16px Arial");
+      if (element.address) {
+        drawCanvasLabel(canvasSel, element.address, -100, 42, "16px Arial");
+      }
     }
   }
+
+  $("#bulkPrintBtn").removeClass("disabled");
+  $("#bulkPdfBtn").removeClass("disabled");
+  $("#bulkLabelCount").text(count + (count === 1 ? " label" : " labels"));
+  showToast(count + (count === 1 ? " label generated" : " labels generated"), "ok");
+}
+
+function printBulkLabels(){
+  if ($("#bulkPrintBtn").hasClass("disabled")) return;
+  window.print();
+}
+
+function exportBulkPdf(){
+  if ($("#bulkPdfBtn").hasClass("disabled")) return;
+  if (typeof window.jspdf === "undefined") {
+    showToast("PDF library failed to load", "err");
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 36;
+  const cols = 2;
+  const gap = 18;
+  const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
+  const cellH = 110;
+  let x = margin, y = margin, col = 0;
+
+  $("#batchBarcodeDisplay canvas").each(function () {
+    if (y + cellH > pageH - margin) {
+      doc.addPage();
+      x = margin; y = margin; col = 0;
+    }
+    const canvas = this;
+    const targetW = Math.min(cellW, canvas.width);
+    const targetH = canvas.height * (targetW / canvas.width);
+    doc.setDrawColor(210);
+    doc.roundedRect(x, y, cellW, cellH, 6, 6);
+    doc.addImage(canvas.toDataURL("image/png"), "PNG", x + (cellW - targetW) / 2, y + (cellH - targetH) / 2, targetW, targetH);
+
+    col++;
+    if (col >= cols) {
+      col = 0; x = margin; y += cellH + gap;
+    } else {
+      x += cellW + gap;
+    }
+  });
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  doc.save("labels-" + stamp + ".pdf");
+  showToast("PDF saved", "ok");
 }
 
 async function processDelimeter() {
-  $('#delimeterText')
   var input = $('#delimeterText').val().trim();
   var lines = input.split('\n');
   var output = '';
@@ -155,6 +217,38 @@ async function processDelimeter() {
   });
 
   $('#outputText').text(output.trim());
+  if (output.trim()) {
+    showToast("Reformatted", "ok");
+  }
+}
+
+function copyDelimeterOutput(){
+  const text = $('#outputText').text();
+  if (!text.trim()) {
+    showToast("Nothing to copy yet", "warn");
+    return;
+  }
+  navigator.clipboard.writeText(text).then(function () {
+    showToast("Copied to clipboard", "ok");
+  }).catch(function () {
+    showToast("Copy failed \u2014 select the text manually", "err");
+  });
+}
+
+/* -------------------------------------------------- shared toast -------------------------------------------------- */
+
+let toastTimer;
+function showToast(message, kind){
+  const el = $("#appToast");
+  if (!el.length) return;
+  el.text(message);
+  el.removeClass("ok warn err");
+  if (kind) el.addClass(kind);
+  el.addClass("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    el.removeClass("show");
+  }, 2200);
 }
 
 function renderModal(){
@@ -320,10 +414,6 @@ function trackPackage() {
       }else{
         console.log("Didnt find Shit");
       }
-
-      /** 
-     
-      **/
     })
   }
 }
@@ -346,7 +436,6 @@ function getTrackingnInfo(trackingNumber){
   });
 }
 
-
 function checkAndTrack() {
   const tracking = $("#barcodeNumber").val();
   if(tracking && tracking.length > 6){
@@ -355,14 +444,3 @@ function checkAndTrack() {
     render();
   }
 }
-
-// function selectStop(evt){
-//   let element = $(evt);
-//   stop = JSON.parse(element.attr("stop"));
-//   $($('[stop]')).removeClass("active");
-//   element.addClass("active");
-//   $("#stopSelected").html(stop.Street + ", " + stop.City)
-//   $($('[firstStop]')).attr("firstStop",""+stop.Street + ", " + stop.City);
-//   $("#optimizeButton").fadeIn("fast").fadeOut("fast").fadeIn("slow");
-// }
-
