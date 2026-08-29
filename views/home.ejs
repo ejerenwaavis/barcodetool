@@ -165,8 +165,8 @@
     </div>
 
     <div class="tab-pane fade" id="scanner" role="tabpanel" aria-labelledby="scanner-tab">
-      <div style="width: 100%; height: 85vh;">
-        <iframe src="<%= body.domain %>/scanner.html" style="width: 100%; height: 100%; border: none; overflow: hidden;"></iframe>
+      <div style="width: 100%; height: calc(100vh - 120px); min-height: 550px;">
+        <iframe src="<%= body.domain %>/scanner.html" style="width: 100%; height: 100%; border: none;"></iframe>
       </div>
     </div>
       <!-- <div class="tab-pane fade" id="nav-contact" role="tabpanel" aria-labelledby="nav-contact-tab" tabindex="0">...</div> -->
@@ -242,6 +242,22 @@
   <script defer src="<%= body.domain %>/dist/js/barcode.js"></script>
   <!-- <script src="js/barcode.js"></script> -->
 
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const footer = document.querySelector('.app-footer');
+      if(footer) {
+        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+          tab.addEventListener('shown.bs.tab', function (event) {
+            if (event.target.id === 'scanner-tab') {
+              footer.style.display = 'none';
+            } else {
+              footer.style.display = 'block';
+            }
+          });
+        });
+      }
+    });
+  </script>
   </body>
 
   </html>
