@@ -276,6 +276,19 @@ textarea.form-control {
   gap: 14px;
 }
 
+#batchBarcodeDisplay.scroll-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 80px;
+  padding: 40px 0 80vh 0; /* Huge bottom padding to let the last barcode scroll up */
+}
+#batchBarcodeDisplay.scroll-mode .label-card {
+  width: 100%;
+  max-width: 420px;
+  transform: scale(1.15);
+}
+
 .label-card {
   background: var(--surface);
   border: 1px solid var(--border);

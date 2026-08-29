@@ -99,6 +99,11 @@ function render(){
 async function processBatch(){
   const fieldText = $('#barcodesBatchText').val().toUpperCase();
   const barcodeDisplay = $("#batchBarcodeDisplay");
+  
+  if (barcodeDisplay.hasClass("scroll-mode")) {
+    toggleAutoScroll(); // reset back to grid mode first
+  }
+
   barcodeDisplay.empty();
   let count = 0;
 
@@ -123,6 +128,7 @@ async function processBatch(){
     barcodeDisplay.html('<p class="label-empty">No valid entries found. Add one barcode per line.</p>');
     $("#bulkPrintBtn").addClass("disabled");
     $("#bulkPdfBtn").addClass("disabled");
+    $("#autoScrollBtn").addClass("disabled");
     $("#bulkLabelCount").text("");
     return;
   }
@@ -149,6 +155,7 @@ async function processBatch(){
 
   $("#bulkPrintBtn").removeClass("disabled");
   $("#bulkPdfBtn").removeClass("disabled");
+  $("#autoScrollBtn").removeClass("disabled");
   $("#bulkLabelCount").text(count + (count === 1 ? " label" : " labels"));
   showToast(count + (count === 1 ? " label generated" : " labels generated"), "ok");
 }
@@ -442,5 +449,37 @@ function checkAndTrack() {
     $("#trackPackageBtn").removeClass("disabled")
     $("#trackPackageBtn").click();
     render();
+  }
+}
+let scrollInterval = null;
+function toggleAutoScroll() {
+  const container = $("#batchBarcodeDisplay");
+  const btn = $("#autoScrollBtn");
+  
+  if (btn.hasClass("disabled")) return;
+
+  if (container.hasClass("scroll-mode")) {
+    // Stop scrolling
+    clearInterval(scrollInterval);
+    scrollInterval = null;
+    container.removeClass("scroll-mode");
+    btn.text("Auto Scroll").removeClass("btn-accent").addClass("btn-secondary");
+  } else {
+    // Start scrolling
+    container.addClass("scroll-mode");
+    btn.text("Stop Scroll").removeClass("btn-secondary").addClass("btn-accent");
+    
+    // Smooth scroll down the page
+    const speed = 1.5; // pixels per frame
+    scrollInterval = setInterval(() => {
+      window.scrollBy(0, speed);
+      
+      // Stop automatically if we hit the very bottom
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 2) {
+         clearInterval(scrollInterval);
+         scrollInterval = null;
+         btn.text("Done (Click to Reset)").removeClass("btn-accent").addClass("btn-secondary");
+      }
+    }, 20); // ~50fps
   }
 }
