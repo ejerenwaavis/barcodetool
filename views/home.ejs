@@ -44,7 +44,7 @@
       <div class="tab-pane fade show active" id="generate" role="tabpanel" aria-labelledby="generate-tab" tabindex="0">
         <!-- start barcode copy -->
         <div class="container">
-          <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card">
+          <div class="mx-auto app-card">
 
             <div class="input-group d-print-none app-input-group">
               <span class="input-group-text" id="addon-wrapping">Barcode #</span>
@@ -56,12 +56,9 @@
             <input disabled type="text" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control"
               placeholder="Brand Name" >
 
-          <div class=" row p-0  m-auto text-center container d-print-none pt-4" id="printArea">
+          <div class="p-0 m-auto text-center d-print-none mt-4" id="printArea" style="display: none;">
             <!-- Main Canvas -->
-
             <canvas class="pb-4 pt-0" id="barcode"></canvas>
-            <!-- <canvas width="1890" height="1656"  style="width:360px;height:220px;" class="pb-4 pt-0" id="barcode"></canvas> -->
-            <!-- <canvas hidden height="500" width="800" class=" pb-4 pt-0" id="barcode-big"></canvas> -->
           </div>
 
           <div class="d-block d-print-none">
@@ -101,7 +98,7 @@
 
     <div class="tab-pane fade" id="brand-finder" role="tabpanel" aria-labelledby="brand-finder-tab" tabindex="0">
       <div class="container">
-        <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card">
+        <div class="mx-auto app-card">
 
           <label class="form-label">Barcode #</label>
           <div class="input-group app-input-group">
@@ -118,7 +115,7 @@
 
     <div class="tab-pane fade" id="bulk-task" role="tabpanel" aria-labelledby="bulk-task-tab" >
       <div class="container">
-        <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card d-print-none">
+        <div class="mx-auto app-card d-print-none">
           <div class="mb-3">
             <label for="barcodesBatchText" class="form-label">Input Barcodes</label>
             <textarea class="form-control" placeholder="One entry per line, as shown below:&#10;'123456789'&#10;'123456789, 1234 Bluejay Dr, NW, Atlanta'" id="barcodesBatchText" rows="8"></textarea>
@@ -130,7 +127,13 @@
           <div class="label-toolbar d-print-none">
             <button class="btn btn-outline-accent btn-sm disabled" id="bulkPrintBtn" onclick="printBulkLabels()">Print Labels</button>
             <button class="btn btn-secondary btn-sm disabled" id="bulkPdfBtn" onclick="exportBulkPdf()">Export as PDF</button>
-            <button class="btn btn-secondary btn-sm disabled" id="autoScrollBtn" onclick="toggleAutoScroll()">Auto Scroll</button>
+            <select id="scrollSpeed" class="form-select form-select-sm d-inline-block w-auto ms-auto ms-md-2" style="font-size: .82rem; font-weight: 500; border-color: var(--border-strong); cursor: pointer;" disabled>
+              <option value="1">Slow</option>
+              <option value="2.5" selected>Medium</option>
+              <option value="4.5">Fast</option>
+              <option value="7">Super Fast</option>
+            </select>
+            <button class="btn btn-secondary btn-sm disabled ms-1" id="autoScrollBtn" onclick="toggleAutoScroll()">Auto Scroll</button>
             <span class="label-count" id="bulkLabelCount"></span>
           </div>
           <div class="pt-3" id="batchBarcodeDisplay">
@@ -143,7 +146,7 @@
 
     <div class="tab-pane fade" id="delimeter" role="tabpanel" aria-labelledby="delimeter-tab">
       <div class="container">
-        <div class="col-sm-10 col-md-8 offset-sm-1 offset-md-2 app-card">
+        <div class="mx-auto app-card">
           <div class="mb-3">
             <label for="delimeterText" class="form-label">Input Text</label>
             <textarea class="form-control"

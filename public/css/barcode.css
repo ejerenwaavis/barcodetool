@@ -127,6 +127,8 @@ nav.navbar-dark.bg-dark {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 1.75rem;
+  max-width: 650px;
+  margin: 0 auto;
 }
 
 .tab-pane { padding-top: .5rem; }
@@ -282,6 +284,13 @@ textarea.form-control {
   align-items: center;
   gap: 80px;
   padding: 40px 0 80vh 0; /* Huge bottom padding to let the last barcode scroll up */
+  max-height: 60vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
 }
 #batchBarcodeDisplay.scroll-mode .label-card {
   width: 100%;
@@ -359,8 +368,8 @@ textarea.form-control {
 #appToast {
   position: fixed;
   left: 50%;
-  top: 18px;
-  transform: translate(-50%, -140%);
+  top: -100px;
+  transform: translateX(-50%);
   background: var(--success);
   color: #fff;
   font-weight: 600;
@@ -368,13 +377,13 @@ textarea.form-control {
   padding: 11px 20px;
   border-radius: var(--radius-pill);
   z-index: 2000;
-  transition: transform .28s cubic-bezier(.175, .885, .32, 1.275);
+  transition: top .28s cubic-bezier(.175, .885, .32, 1.275);
   box-shadow: var(--shadow-lg);
   max-width: 88vw;
   text-align: center;
 }
 
-#appToast.show { transform: translate(-50%, 0); }
+#appToast.show { top: 18px; }
 #appToast.warn { background: var(--warn); }
 #appToast.err { background: var(--danger); }
 

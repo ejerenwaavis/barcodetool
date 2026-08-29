@@ -44,11 +44,11 @@
     text-align:center;padding:20px;color:var(--sub);font-size:14.5px;background:var(--panel);}
   #camStatus button{margin-top:14px; border-radius:20px; padding: 12px 24px;}
 
-  #toast{position:fixed;left:50%;top:20px;transform:translate(-50%,-140%);
+  #toast{position:fixed;left:50%;top:-100px;transform:translateX(-50%);
     background:var(--warn);color:#1a1400;font-weight:600;font-size:14px;
-    padding:12px 20px;border-radius:30px;z-index:50;transition:transform .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    padding:12px 20px;border-radius:30px;z-index:50;transition:top .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow:0 8px 24px rgba(0,0,0,.15);max-width:88vw;text-align:center;}
-  #toast.show{transform:translate(-50%,0);}
+  #toast.show{top:20px;}
   #toast.ok{background:var(--success);color:#fff;}
   #toast.err{background:var(--danger);color:#fff;}
 

@@ -51,6 +51,7 @@ function render(){
   const text = (field.val()).toUpperCase().trim();
   
   if(text){
+    $("#printArea").show();
     $("#printButton").removeClass("disabled");
     
     if(text.length > 6){
@@ -85,6 +86,7 @@ function render(){
     }
 
   }else{
+    $("#printArea").hide();
     $("#printButton").addClass("disabled");
     JsBarcode("#barcode", " ", {
       width: 1.4,
@@ -101,7 +103,7 @@ async function processBatch(){
   const barcodeDisplay = $("#batchBarcodeDisplay");
   
   if (barcodeDisplay.hasClass("scroll-mode")) {
-    toggleAutoScroll(); // reset back to grid mode first
+    resetAutoScroll();
   }
 
   barcodeDisplay.empty();
@@ -455,31 +457,55 @@ let scrollInterval = null;
 function toggleAutoScroll() {
   const container = $("#batchBarcodeDisplay");
   const btn = $("#autoScrollBtn");
+  const speedSelect = $("#scrollSpeed");
   
   if (btn.hasClass("disabled")) return;
 
-  if (container.hasClass("scroll-mode")) {
-    // Stop scrolling
+  if (container.hasClass("scroll-mode") && scrollInterval) {
+    // Stop scrolling but keep the view so user can manually swipe
     clearInterval(scrollInterval);
     scrollInterval = null;
-    container.removeClass("scroll-mode");
-    btn.text("Auto Scroll").removeClass("btn-accent").addClass("btn-secondary");
-  } else {
-    // Start scrolling
-    container.addClass("scroll-mode");
+    btn.text("Resume Scroll").removeClass("btn-accent").addClass("btn-secondary");
+  } else if (container.hasClass("scroll-mode")) {
+    // Resume scrolling
     btn.text("Stop Scroll").removeClass("btn-secondary").addClass("btn-accent");
-    
-    // Smooth scroll down the page
-    const speed = 1.5; // pixels per frame
-    scrollInterval = setInterval(() => {
-      window.scrollBy(0, speed);
-      
-      // Stop automatically if we hit the very bottom
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 2) {
-         clearInterval(scrollInterval);
-         scrollInterval = null;
-         btn.text("Done (Click to Reset)").removeClass("btn-accent").addClass("btn-secondary");
-      }
-    }, 20); // ~50fps
+    startScrollLoop(container, btn, speedSelect);
+  } else {
+    // Start scrolling (first time)
+    container.addClass("scroll-mode");
+    speedSelect.prop("disabled", false);
+    btn.text("Stop Scroll").removeClass("btn-secondary").addClass("btn-accent");
+    startScrollLoop(container, btn, speedSelect);
   }
+}
+
+function startScrollLoop(container, btn, speedSelect) {
+  clearInterval(scrollInterval);
+  scrollInterval = setInterval(() => {
+    const speed = parseFloat(speedSelect.val()) || 2.5;
+    const elem = container[0];
+    elem.scrollTop += speed;
+    
+    // Check if we hit the bottom
+    if (elem.scrollTop + elem.clientHeight >= elem.scrollHeight - 2) {
+       clearInterval(scrollInterval);
+       scrollInterval = null;
+       btn.text("Done (Reset)").removeClass("btn-accent").addClass("btn-secondary");
+       // When they click Done (Reset), we should probably reset the whole view
+       btn.off('click').on('click', resetAutoScroll);
+    }
+  }, 20); // ~50fps
+}
+function resetAutoScroll() {
+  const container = $("#batchBarcodeDisplay");
+  const btn = $("#autoScrollBtn");
+  const speedSelect = $("#scrollSpeed");
+  clearInterval(scrollInterval);
+  scrollInterval = null;
+  container.removeClass("scroll-mode");
+  container[0].scrollTop = 0;
+  speedSelect.prop("disabled", true);
+  btn.text("Auto Scroll").removeClass("btn-accent").addClass("btn-secondary");
+  // ensure we unbind the custom reset click and bind the toggle
+  btn.off('click').on('click', toggleAutoScroll);
 }
