@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Barcode Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --panel:#14171b;
+    --line:#242830;
+    --text:#e8eaed;
+    --sub:#8b93a1;
+    --accent:#3ddc84;
+    --accent-dim:#1f6b41;
+    --warn:#f5a623;
+    --danger:#e14b4b;
+    --mono: "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-tap-highlight-color:transparent;}
+  body{min-height:100vh;display:flex;flex-direction:column;}
+
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--bg);z-index:5;}
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px;}
+  header .stats{font-family:var(--mono);font-size:12px;color:var(--sub);}
+
+  #camWrap{position:relative;background:#000;width:100%;aspect-ratio:4/3;max-height:52vh;
+    overflow:hidden;border-bottom:1px solid var(--line);}
+  video{width:100%;height:100%;object-fit:cover;display:block;}
+  #scanBox{position:absolute;left:8%;right:8%;top:38%;bottom:38%;
+    border:2px solid rgba(61,220,132,.85);border-radius:10px;
+    box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none;}
+  #scanBox.flash{border-color:var(--accent);animation:flash .35s ease;}
+  @keyframes flash{0%{box-shadow:0 0 0 999px rgba(61,220,132,.25);}100%{box-shadow:0 0 0 999px rgba(0,0,0,.35);}}
+
+  #camStatus{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;padding:20px;color:var(--sub);font-size:14px;background:#0b0d10;}
+  #camStatus button{margin-top:12px;}
+
+  #toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-140%);
+    background:var(--warn);color:#1a1400;font-weight:600;font-size:13.5px;
+    padding:10px 16px;border-radius:10px;z-index:50;transition:transform .25s ease;
+    box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:88vw;text-align:center;}
+  #toast.show{transform:translate(-50%,0);}
+  #toast.ok{background:var(--accent);color:#062b15;}
+  #toast.err{background:var(--danger);color:#2a0a0a;}
+
+  main{flex:1;display:flex;flex-direction:column;padding:14px 16px 90px;gap:10px;}
+
+  .controls{display:flex;gap:8px;flex-wrap:wrap;}
+  button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-size:14px;font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer;}
+  button:active{transform:scale(.97);}
+  button.primary{background:var(--accent);color:#062b15;border-color:var(--accent);}
+  button.danger{background:transparent;color:var(--danger);border-color:var(--danger);}
+  button:disabled{opacity:.4;}
+
+  label.small{font-size:12px;color:var(--sub);display:flex;align-items:center;gap:6px;}
+
+  #listLabel{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px;}
+  #listLabel span.count{font-family:var(--mono);color:var(--sub);font-size:12px;}
+  textarea{width:100%;flex:1;min-height:34vh;background:var(--panel);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--mono);
+    font-size:13.5px;line-height:1.5;resize:vertical;}
+  textarea::placeholder{color:var(--sub);}
+
+  .bottomBar{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg,rgba(11,13,16,0) 0%,var(--bg) 30%);
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .bottomBar button{padding:13px 10px;font-size:13.5px;}
+  #permHelp{margin-top:14px;text-align:left;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--sub);line-height:1.5;}
+  #permHelp b{color:var(--text);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Barcode Scanner</h1>
+  <div class="stats"><span id="uniqueCount">0</span> unique · <span id="totalCount">0</span> scans</div>
+</header>
+
+<div id="camWrap">
+  <video id="video" playsinline muted></video>
+  <div id="scanBox"></div>
+  <div id="camStatus">
+    <div style="max-width:520px;">
+      <div id="camStatusText">Tap Start to turn on the camera and begin scanning.</div>
+      <button id="startBtn" class="primary">Start Scanning</button>
+      <div id="permHelp" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<main>
+  <div class="controls">
+    <button id="toggleBtn" style="display:none;">Pause</button>
+    <label class="small"><input type="checkbox" id="dupToggle"> Allow duplicate lines</label>
+  </div>
+
+  <div id="listLabel">
+    <span>Scanned codes <span style="color:var(--sub);font-weight:400;">— paste or edit, then export</span></span>
+    <span class="count"><span id="listCount">0</span> lines</span>
+  </div>
+  <textarea id="output" placeholder="Scanned barcodes will appear here, one per line. You can also paste a list of codes here directly, then tap Export as PDF to generate barcode images." spellcheck="false"></textarea>
+</main>
+
+<div class="bottomBar">
+  <button id="copyBtn" class="primary">Copy All</button>
+  <button id="downloadBtn">Download .txt</button>
+  <button id="pdfBtn">Export as PDF</button>
+  <button id="clearBtn" class="danger">Clear</button>
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('video');
+  const scanBox = document.getElementById('scanBox');
+  const camStatus = document.getElementById('camStatus');
+  const camStatusText = document.getElementById('camStatusText');
+  const permHelp = document.getElementById('permHelp');
+  const startBtn = document.getElementById('startBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const output = document.getElementById('output');
+  const toast = document.getElementById('toast');
+  const uniqueCountEl = document.getElementById('uniqueCount');
+  const totalCountEl = document.getElementById('totalCount');
+  const listCountEl = document.getElementById('listCount');
+  const dupToggle = document.getElementById('dupToggle');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  let stream = null;
+  let detector = null;
+  let scanning = false;
+  let paused = false;
+  let seen = new Set();       // unique codes seen
+  let lines = [];             // ordered list as written to textarea
+  let totalScans = 0;
+  let lastCode = null;
+  let lastCodeTime = 0;
+  const REPEAT_IGNORE_MS = 1800; // ignore identical re-reads within this window
+
+  const FORMATS = ['code_128','code_39','code_93','codabar','ean_13','ean_8','upc_a','upc_e','itf'];
+
+  function showToast(msg, kind){
+    toast.textContent = msg;
+    toast.className = kind || '';
+    requestAnimationFrame(()=> toast.classList.add('show'));
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toast.classList.remove('show'), 1600);
+  }
+
+  function updateCounts(){
+    uniqueCountEl.textContent = seen.size;
+    totalCountEl.textContent = totalScans;
+    listCountEl.textContent = lines.length;
+  }
+
+  function flashBox(){
+    scanBox.classList.remove('flash');
+    void scanBox.offsetWidth;
+    scanBox.classList.add('flash');
+  }
+
+  function handleCode(value){
+    totalScans++;
+    const now = Date.now();
+    if (value === lastCode && (now - lastCodeTime) < REPEAT_IGNORE_MS){
+      updateCounts();
+      return; // same code still under the camera, don't spam
+    }
+    lastCode = value;
+    lastCodeTime = now;
+    flashBox();
+
+    const isDup = seen.has(value);
+    if (isDup && !dupToggle.checked){
+      showToast('Already scanned: ' + value, 'err');
+      updateCounts();
+      return;
+    }
+    if (isDup){
+      showToast('Duplicate added: ' + value, '');
+    }
+    seen.add(value);
+    lines.push(value);
+    output.value = lines.join('\n');
+    output.scrollTop = output.scrollHeight;
+    updateCounts();
+  }
+
+  async function startCamera(){
+    camStatusText.textContent = 'Requesting camera…';
+    permHelp.style.display = 'none';
+    startBtn.style.display = 'none';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      camStatusText.textContent = 'This browser does not support camera access here.';
+      startBtn.style.display = 'inline-block';
+      return false;
+    }
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost'){
+      camStatusText.textContent = 'Camera requires a secure (https) page. This page is not loaded over https.';
+      startBtn.style.display = 'inline-block';
+      return false;
+    }
+
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width:{ideal:1280}, height:{ideal:720} },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+    }catch(err){
+      startBtn.style.display = 'inline-block';
+      startBtn.textContent = 'Try Again';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+        camStatusText.textContent = 'Camera permission is blocked for this page.';
+        permHelp.style.display = 'block';
+        permHelp.innerHTML =
+          '<b>No prompt appeared because this site was already blocked.</b><br>' +
+          'On Chrome (Android): tap the <b>Tune/lock icon</b> to the left of the address bar → <b>Permissions</b> → <b>Camera</b> → set to <b>Allow</b>, then reload this page.<br><br>' +
+          'Or: Chrome menu (⋮) → <b>Settings</b> → <b>Site settings</b> → <b>Camera</b> → find this site → <b>Allow</b>.<br><br>' +
+          'If this page is embedded inside another app/frame, open it directly in your browser (not inside another app) and try again.';
+      } else if (err.name === 'NotFoundError'){
+        camStatusText.textContent = 'No camera was found on this device.';
+      } else if (err.name === 'NotReadableError'){
+        camStatusText.textContent = 'The camera is already in use by another app. Close other camera apps and try again.';
+      } else {
+        camStatusText.textContent = 'Camera access failed: ' + (err.message || err.name);
+      }
+      return false;
+    }
+
+    if (!('BarcodeDetector' in window)){
+      camStatusText.textContent = 'This browser has no built-in barcode detector. Use Chrome or Edge on Android, or Chrome/Edge desktop, for camera scanning.';
+      startBtn.style.display = 'none';
+      return false;
+    }
+
+    try{
+      detector = new BarcodeDetector({ formats: FORMATS });
+    }catch(e){
+      detector = new BarcodeDetector();
+    }
+
+    camStatus.style.display = 'none';
+    toggleBtn.style.display = 'inline-block';
+    scanning = true;
+    paused = false;
+    loop();
+    return true;
+  }
+
+  async function loop(){
+    if (!scanning) return;
+    if (!paused && detector && video.readyState >= 2){
+      try{
+        const codes = await detector.detect(video);
+        if (codes && codes.length){
+          for (const c of codes){
+            if (c.rawValue) handleCode(c.rawValue);
+          }
+        }
+      }catch(e){ /* transient detection errors are fine, keep looping */ }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('click', startCamera);
+
+  toggleBtn.addEventListener('click', ()=>{
+    paused = !paused;
+    toggleBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+
+  copyBtn.addEventListener('click', async ()=>{
+    if (!lines.length){ showToast('Nothing to copy yet', 'err'); return; }
+    try{
+      await navigator.clipboard.writeText(lines.join('\n'));
+      showToast('Copied ' + lines.length + ' line(s)', 'ok');
+    }catch(e){
+      output.focus();
+      output.select();
+      showToast('Copy failed — text is selected, use your keyboard copy', 'err');
+    }
+  });
+
+  downloadBtn.addEventListener('click', ()=>{
+    if (!lines.length){ showToast('Nothing to download yet', 'err'); return; }
+    const blob = new Blob([lines.join('\n') + '\n'], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    a.href = url;
+    a.download = 'barcodes-' + stamp + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  const pdfBtn = document.getElementById('pdfBtn');
+  pdfBtn.addEventListener('click', ()=>{
+    // Reflect any manual edits in the textarea before exporting
+    const codes = output.value.split('\n').map(s=>s.trim()).filter(l => l.length);
+    if (!codes.length){ showToast('Nothing to export yet', 'err'); return; }
+    if (typeof JsBarcode === 'undefined' || typeof window.jspdf === 'undefined'){
+      showToast('PDF libraries failed to load — check your connection', 'err');
+      return;
+    }
+
+    pdfBtn.disabled = true;
+    pdfBtn.textContent = 'Building…';
+
+    setTimeout(()=>{
+      try{
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit:'pt', format:'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        const usableW = pageW - margin*2;
+        const blockH = 90;
+        let y = margin;
+        let rendered = 0, failed = 0;
+
+        codes.forEach((code)=>{
+          if (y + blockH > pageH - margin){ doc.addPage(); y = margin; }
+          const canvas = document.createElement('canvas');
+          try{
+            JsBarcode(canvas, code, {
+              format: 'CODE128', displayValue: true, height: 55,
+              margin: 8, fontSize: 14, textMargin: 4
+            });
+            const targetH = 70;
+            const targetW = canvas.width * (targetH / canvas.height);
+            const drawW = Math.min(targetW, usableW);
+            const drawH = canvas.height * (drawW / canvas.width);
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, drawW, drawH);
+            y += drawH + 22;
+            rendered++;
+          }catch(e){
+            doc.setFontSize(10);
+            doc.setTextColor(200,50,50);
+            doc.text('Could not render as CODE128: ' + code, margin, y + 14);
+            doc.setTextColor(0,0,0);
+            y += 26;
+            failed++;
+          }
+        });
+
+        const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+        doc.save('barcodes-' + stamp + '.pdf');
+        showToast(failed ? (rendered + ' rendered, ' + failed + ' failed') : ('PDF saved: ' + rendered + ' barcode(s)'), failed ? 'err' : 'ok');
+      }catch(e){
+        showToast('PDF generation failed: ' + e.message, 'err');
+      }finally{
+        pdfBtn.disabled = false;
+        pdfBtn.textContent = 'Export as PDF';
+      }
+    }, 30);
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    if (!lines.length) return;
+    if (!confirm('Clear all ' + lines.length + ' scanned code(s)?')) return;
+    seen.clear();
+    lines = [];
+    totalScans = 0;
+    lastCode = null;
+    output.value = '';
+    updateCounts();
+    showToast('Cleared', '');
+  });
+
+  output.addEventListener('input', ()=>{
+    // allow manual edits; keep dedupe set in sync with manual edits
+    lines = output.value.split('\n').filter(l => l.length);
+    seen = new Set(lines);
+    updateCounts();
+  });
+
+  updateCounts();
+})();
+</script>
+</body>
+</html>
