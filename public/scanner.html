@@ -189,9 +189,18 @@
   }
 
   function handleCode(value){
-    // QR codes often contain multiple pipe-delimited fields. We only want the first field (the barcode).
+    // QR codes often contain multiple pipe-delimited fields. We only want the first field.
     if (value.includes('|')) {
       value = value.split('|')[0];
+    }
+    
+    // Complex 2D barcodes (like PDF417) often contain embedded tracking numbers in a long string (e.g., ANSI MH10.8.2)
+    if (value.length > 25 || value.includes('[)>')) {
+      // Look for known 15-character OnTrac/LaserShip tracking numbers, or SpeedX
+      const extractMatch = value.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12}|SPX[A-Za-z0-9]+)/i);
+      if (extractMatch) {
+        value = extractMatch[0];
+      }
     }
 
     // Apply carrier filtering rules
