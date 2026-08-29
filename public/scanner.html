@@ -150,7 +150,7 @@
   let lastCodeTime = 0;
   const REPEAT_IGNORE_MS = 1800; // ignore identical re-reads within this window
 
-  const FORMATS = ['code_128','code_39','code_93','codabar','ean_13','ean_8','upc_a','upc_e','itf'];
+  const FORMATS = ['code_128','code_39','code_93','codabar','ean_13','ean_8','upc_a','upc_e','itf','qr_code'];
 
   function showToast(msg, kind){
     toast.textContent = msg;
@@ -173,6 +173,11 @@
   }
 
   function handleCode(value){
+    // QR codes often contain multiple pipe-delimited fields. We only want the first field (the barcode).
+    if (value.includes('|')) {
+      value = value.split('|')[0];
+    }
+    
     totalScans++;
     const now = Date.now();
     if (value === lastCode && (now - lastCodeTime) < REPEAT_IGNORE_MS){
