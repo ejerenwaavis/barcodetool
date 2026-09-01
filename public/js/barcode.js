@@ -509,3 +509,55 @@ function resetAutoScroll() {
   // ensure we unbind the custom reset click and bind the toggle
   btn.off('click').on('click', toggleAutoScroll);
 }
+// --- QR Code Logic ---
+const debouncedGenerateQr = debounce(generateQrCode, 200);
+
+$("#qrInput, #qrColorDark, #qrColorLight, #qrCorrection, #qrMargin").on("input change", debouncedGenerateQr);
+
+function generateQrCode() {
+  const text = $("#qrInput").val().trim();
+  const canvas = document.getElementById("qrCanvas");
+  
+  if (text) {
+    $("#qrPrintArea").show();
+    $("#exportQrBtn").removeClass("disabled");
+    
+    if (typeof QRCode !== 'undefined') {
+      QRCode.toCanvas(canvas, text, {
+        width: 300,
+        margin: parseInt($("#qrMargin").val()) || 2,
+        color: {
+          dark: $("#qrColorDark").val(),
+          light: $("#qrColorLight").val()
+        },
+        errorCorrectionLevel: $("#qrCorrection").val()
+      }, function (error) {
+        if (error) console.error(error);
+      });
+    } else {
+      showToast("QR Code library not loaded", "err");
+    }
+  } else {
+    $("#qrPrintArea").hide();
+    $("#exportQrBtn").addClass("disabled");
+  }
+}
+
+function exportQrCode() {
+  const text = $("#qrInput").val().trim();
+  if (!text) return;
+  
+  const canvas = document.getElementById("qrCanvas");
+  const dataUrl = canvas.toDataURL("image/png");
+  
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  // Generate a clean filename from the input text or a timestamp
+  let cleanName = text.replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+  if (!cleanName) cleanName = 'qr_code';
+  a.download = cleanName + ".png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  showToast("QR Code exported", "ok");
+}

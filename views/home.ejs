@@ -33,6 +33,10 @@
               <button class="nav-link text-reset" id="scanner-tab" data-bs-toggle="tab" data-bs-target="#scanner" type="button"
                 role="tab" aria-controls="scanner" aria-selected="false">Scanner</button>
             </li>
+            <li class="nav-item">
+              <button class="nav-link text-reset" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#qrcode" type="button"
+                role="tab" aria-controls="qrcode" aria-selected="false">QR Code</button>
+            </li>
           </ul>
         </div>
       </nav>
@@ -166,6 +170,60 @@
       <div class="container">
         <div class="col-sm-12 col-md-10 offset-md-1" style="width: 100%; height: calc(100vh - 150px); min-height: 550px;">
           <iframe src="<%= body.domain %>/scanner.html" style="width: 100%; height: 100%; border: none;"></iframe>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="qrcode" role="tabpanel" aria-labelledby="qrcode-tab">
+      <div class="container">
+        <div class="app-card mx-auto" style="max-width: 650px;">
+          
+          <div class="d-flex align-items-center mb-2">
+            <label class="form-label mb-0">QR Code Content</label>
+            <button class="btn btn-sm btn-link text-muted ms-auto p-0" id="qrSettingsBtn" title="QR Code Settings" onclick="$('#qrSettingsPanel').slideToggle('fast')">
+              <i class="bi bi-gear-fill" style="font-size: 1.25rem;"></i>
+            </button>
+          </div>
+          
+          <div class="input-group app-input-group mb-3">
+            <input type="text" id="qrInput" class="form-control" placeholder="Enter text or URL to generate QR code">
+          </div>
+          
+          <!-- Settings Panel -->
+          <div id="qrSettingsPanel" class="p-3 mb-4 rounded" style="display:none; background: var(--surface-2); border: 1px solid var(--border);">
+             <div class="row g-2">
+                <div class="col-6">
+                   <label class="small text-muted mb-1" style="font-size:.8rem; font-weight:600;">Dark Color</label>
+                   <input type="color" id="qrColorDark" class="form-control form-control-color w-100" value="#000000">
+                </div>
+                <div class="col-6">
+                   <label class="small text-muted mb-1" style="font-size:.8rem; font-weight:600;">Light Color</label>
+                   <input type="color" id="qrColorLight" class="form-control form-control-color w-100" value="#ffffff">
+                </div>
+                <div class="col-6 mt-3">
+                   <label class="small text-muted mb-1" style="font-size:.8rem; font-weight:600;">Error Correction</label>
+                   <select id="qrCorrection" class="form-select form-select-sm" style="font-size: .85rem; border-color: var(--border-strong);">
+                      <option value="L">Low (L)</option>
+                      <option value="M" selected>Medium (M)</option>
+                      <option value="Q">Quartile (Q)</option>
+                      <option value="H">High (H)</option>
+                   </select>
+                </div>
+                <div class="col-6 mt-3">
+                   <label class="small text-muted mb-1" style="font-size:.8rem; font-weight:600;">Margin</label>
+                   <input type="number" id="qrMargin" class="form-control form-control-sm" style="font-size: .85rem; border-color: var(--border-strong);" value="2" min="0" max="10">
+                </div>
+             </div>
+          </div>
+
+          <div class="p-0 m-auto text-center mt-2" id="qrPrintArea" style="display: none;">
+            <canvas class="pb-3 pt-0" id="qrCanvas" style="max-width:100%; border-radius: var(--radius-sm);"></canvas>
+          </div>
+
+          <div class="text-center d-print-none mt-3">
+            <button class="btn btn-outline-accent btn-sm disabled" id="exportQrBtn" onclick="exportQrCode()">Export to PNG</button>
+          </div>
+
         </div>
       </div>
     </div>
