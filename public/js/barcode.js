@@ -45,7 +45,68 @@ window.onload = (event) => {
   });
   checkAndTrack();
   initPreloadScan();
+  initConsoleNavigation();
 };
+
+function switchToTab(tabId) {
+  const tabEl = document.getElementById(tabId);
+  if (tabEl) {
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(tabEl).show();
+    } else if (typeof $ !== 'undefined' && $(tabEl).tab) {
+      $(tabEl).tab('show');
+    }
+    syncTabUI(tabId);
+  }
+}
+
+function syncTabUI(activeTabId) {
+  // Update top segmented tabs
+  $('.tabs .tab').removeClass('active').attr('aria-selected', 'false');
+  $('#' + activeTabId).addClass('active').attr('aria-selected', 'true');
+
+  // Scroll active tab into view if needed
+  const activeTabEl = document.getElementById(activeTabId);
+  if (activeTabEl && typeof activeTabEl.scrollIntoView === 'function') {
+    try {
+      activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    } catch(e) {}
+  }
+
+  // Update bottom nav
+  $('.navbar .navitem, .navbar .navitem-center').removeClass('active');
+  $(`.navbar [data-tab="${activeTabId}"]`).addClass('active');
+}
+
+function initConsoleNavigation() {
+  // Sync when top tabs are clicked
+  $(document).on('click', '.tabs .tab', function () {
+    const tabId = $(this).attr('id');
+    if (tabId) {
+      switchToTab(tabId);
+    }
+  });
+
+  // Sync when bottom navbar items are clicked
+  $(document).on('click', '.navbar [data-tab]', function (e) {
+    const tabId = $(this).attr('data-tab');
+    if (tabId) {
+      switchToTab(tabId);
+    }
+  });
+
+  // Bootstrap native tab shown event listener
+  $(document).on('shown.bs.tab', function (e) {
+    const tabId = $(e.target).attr('id');
+    if (tabId) {
+      syncTabUI(tabId);
+    }
+  });
+
+  // Set initial sync state
+  const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  $('#syncStateText').text('Synced ' + timeNow);
+}
 
 function render(){
   const field = $("#barcodeNumber");
@@ -956,6 +1017,13 @@ function updatePreloadMetrics() {
     .css('width', percent + '%')
     .attr('aria-valuenow', percent);
 
+  $('#preloadProgressFill').css('width', percent + '%');
+  $('#preloadProgressFraction').text(`${scanned} / ${total}`);
+
+  // Update sync indicator
+  const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  $('#syncStateText').text('Synced ' + timeNow);
+
   // If last scanned item exists, keep display updated
   const lastScannedPkg = [...preloadSession.packages]
     .filter(p => p.status === 'prescanned' && p.scannedAt)
@@ -966,6 +1034,60 @@ function updatePreloadMetrics() {
     $('#preloadLastAddress').text(lastScannedPkg.address);
     $('#preloadLastBarcode').text(lastScannedPkg.barcode + ' · ' + new Date(lastScannedPkg.scannedAt).toLocaleTimeString());
   }
+
+  renderPreloadLiveFeed();
+}
+
+function renderPreloadLiveFeed() {
+  const container = $('#preloadLiveScanFeed');
+  if (!container.length) return;
+
+  if (!preloadSession || !preloadSession.packages) {
+    container.html('<p class="text-muted small text-center py-2 mb-0">No scans recorded in this session yet</p>');
+    return;
+  }
+
+  const recentScans = [...preloadSession.packages]
+    .filter(p => p.status === 'prescanned' && p.scannedAt)
+    .sort((a, b) => b.scannedAt - a.scannedAt)
+    .slice(0, 5);
+
+  if (recentScans.length === 0) {
+    container.html('<p class="text-muted small text-center py-2 mb-0">No scans recorded in this session yet</p>');
+    $('#preloadLiveScanCount').text('Recent scans');
+    return;
+  }
+
+  $('#preloadLiveScanCount').text(`Last ${recentScans.length}`);
+
+  let html = '';
+  recentScans.forEach(pkg => {
+    const timeStr = new Date(pkg.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    html += `
+      <div class="scan-row">
+        <div class="scan-icon ok">
+          <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <div class="scan-body">
+          <div class="scan-code mono">${escapeHtml(pkg.barcode)} · #${escapeHtml(String(pkg.seq))}</div>
+          <div class="scan-meta">${escapeHtml(pkg.address)}</div>
+        </div>
+        <div class="scan-time mono">${timeStr}</div>
+      </div>
+    `;
+  });
+
+  container.html(html);
+}
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function setPreloadStatusFilter(status) {
