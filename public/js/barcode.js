@@ -48,9 +48,51 @@ window.onload = (event) => {
   initConsoleNavigation();
 };
 
+function switchGenerateMode(mode) {
+  if (mode === 'qr') {
+    $('#genSubtabBarcode').removeClass('active');
+    $('#genSubtabQr').addClass('active');
+    $('#generateBarcodeMode').hide();
+    $('#generateQrMode').show();
+
+    // Smart-sync: Pre-fill QR input from barcode input if empty
+    const barcodeVal = ($('#barcodeNumber').val() || '').trim();
+    const qrVal = ($('#qrInput').val() || '').trim();
+    if (barcodeVal && !qrVal) {
+      $('#qrInput').val(barcodeVal);
+      generateQrCode();
+    }
+    setTimeout(() => $('#qrInput').focus(), 100);
+  } else {
+    $('#genSubtabQr').removeClass('active');
+    $('#genSubtabBarcode').addClass('active');
+    $('#generateQrMode').hide();
+    $('#generateBarcodeMode').show();
+
+    // Smart-sync: Pre-fill barcode input from QR input if empty
+    const barcodeVal = ($('#barcodeNumber').val() || '').trim();
+    const qrVal = ($('#qrInput').val() || '').trim();
+    if (qrVal && !barcodeVal) {
+      $('#barcodeNumber').val(qrVal);
+      render();
+    }
+    setTimeout(() => $('#barcodeNumber').focus(), 100);
+  }
+}
+
+function switchToGenerateMode(mode) {
+  switchToTab('generate');
+  switchGenerateMode(mode);
+}
+
 function switchToTab(tabId) {
   if (!tabId) return;
   const cleanId = tabId.replace('-tab', '');
+
+  if (cleanId === 'qrcode') {
+    switchToGenerateMode('qr');
+    return;
+  }
 
   // 1. Switch visible tab pane in #nav-tabContent
   $('#nav-tabContent .tab-pane').removeClass('show active');
@@ -65,7 +107,7 @@ function switchToTab(tabId) {
   if (matchingNav.length) {
     matchingNav.addClass('active');
   } else {
-    // If it's a secondary tool in the modal (brand-finder, delimeter, qrcode), highlight 'More'
+    // If it's a secondary tool in the modal (brand-finder, delimeter), highlight 'More'
     $(`.navbar [data-tab="more-tab"]`).addClass('active');
   }
 
