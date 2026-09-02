@@ -707,8 +707,12 @@ function initPreloadScan() {
         $('#preloadResumeDetails').text(
           `${scannedCount} of ${preloadSession.packages.length} scanned (${preloadSession.filename || 'Manifest'})`
         );
-        $('#preloadResumeBanner').show();
+        $('#preloadResumeBanner').removeClass('d-none').addClass('d-flex');
+      } else {
+        $('#preloadResumeBanner').addClass('d-none').removeClass('d-flex');
       }
+    } else {
+      $('#preloadResumeBanner').addClass('d-none').removeClass('d-flex');
     }
   } catch (e) {
     console.warn("Error checking saved preload session", e);
@@ -718,34 +722,37 @@ function initPreloadScan() {
 function initPreloadDropZone() {
   const dropZone = document.getElementById('preloadDropZone');
   const fileInput = document.getElementById('preloadFileInput');
-  if (!dropZone || !fileInput) return;
+  if (!fileInput) return;
 
-  ['dragenter', 'dragover'].forEach(eventName => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.add('dragover');
+  if (dropZone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragover');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dragover');
+      }, false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files.length) {
+        handlePreloadFileInput(dt.files[0]);
+      }
     }, false);
-  });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove('dragover');
-    }, false);
-  });
-
-  dropZone.addEventListener('drop', (e) => {
-    const dt = e.dataTransfer;
-    if (dt && dt.files && dt.files.length) {
-      handlePreloadFileInput(dt.files[0]);
-    }
-  }, false);
+  }
 
   fileInput.addEventListener('change', (e) => {
     if (fileInput.files && fileInput.files.length) {
       handlePreloadFileInput(fileInput.files[0]);
+      fileInput.value = '';
     }
   });
 }
@@ -903,7 +910,7 @@ function confirmResetPreload(fromBanner) {
   preloadSession = { filename: '', timestamp: 0, packages: [], active: false };
   localStorage.removeItem(PRELOAD_STORAGE_KEY);
 
-  $('#preloadResumeBanner').hide();
+  $('#preloadResumeBanner').addClass('d-none').removeClass('d-flex');
   $('#preloadActiveSection').hide();
   $('#preloadUploadSection').show();
   $('#preloadFileInput').val('');

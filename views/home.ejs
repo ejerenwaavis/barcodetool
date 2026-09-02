@@ -159,7 +159,7 @@
         <div id="preloadUploadSection" class="preload-card-wide mx-auto">
           
           <!-- Persistent Session Resume Banner -->
-          <div id="preloadResumeBanner" class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4" style="display:none;">
+          <div id="preloadResumeBanner" class="alert alert-info align-items-center justify-content-between flex-wrap gap-2 mb-4 d-none">
             <div class="d-flex align-items-center gap-2">
               <i class="bi bi-clock-history fs-4"></i>
               <div>
@@ -178,14 +178,19 @@
             <p class="text-muted mb-0">Upload package manifest (.csv or .zip) to start sorting and numbering packages</p>
           </div>
 
-          <!-- Drag and drop zone -->
-          <div class="preload-dropzone mb-4" id="preloadDropZone" onclick="$('#preloadFileInput').click()">
+          <!-- Drag and drop zone (native label for 100% mobile compatibility) -->
+          <label for="preloadFileInput" class="preload-dropzone mb-4 d-block text-center" id="preloadDropZone" style="cursor: pointer;">
             <i class="bi bi-cloud-arrow-up"></i>
             <h5 class="fw-bold mb-1">Click to browse or drag & drop manifest here</h5>
             <p class="text-muted small mb-2">Accepts <strong>.csv</strong> or <strong>.zip</strong> containing CSV</p>
-            <span class="badge bg-light text-dark border">Auto-extracts Barcode, Seq No, Address</span>
-            <input type="file" id="preloadFileInput" class="d-none" accept=".csv,.zip,.txt">
-          </div>
+            <span class="badge bg-light text-dark border mb-3">Auto-extracts Barcode, Seq No, Address</span>
+            <div>
+              <span class="btn btn-primary btn-sm px-3 py-2 fw-semibold">
+                <i class="bi bi-folder2-open me-1"></i>Select Manifest File
+              </span>
+            </div>
+            <input type="file" id="preloadFileInput" accept=".csv,text/csv,text/plain,.txt,.zip,application/zip,application/x-zip-compressed" style="opacity: 0; position: absolute; z-index: -1; width: 1px; height: 1px; pointer-events: none;">
+          </label>
 
           <!-- Quick Paste Alternative -->
           <div class="text-center mb-2">
