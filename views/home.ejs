@@ -27,19 +27,8 @@
             <span class="sync-dot"></span>
             <span id="syncStateText">Synced</span>
           </div>
-          <div class="avatar" title="ACED DevOps">AD</div>
+          <div class="avatar" title="All Tools" data-bs-toggle="modal" data-bs-target="#moreToolsModal" style="cursor:pointer;">AD</div>
         </div>
-      </div>
-
-      <!-- Segmented Tabs under topbar -->
-      <div class="tabs" role="tablist" id="nav-tab">
-        <div class="tab <%= activeTab === 'preload-scan' ? 'active' : '' %>" id="preload-scan-tab" data-bs-toggle="tab" data-bs-target="#preload-scan" role="tab" aria-controls="preload-scan" aria-selected="<%= activeTab === 'preload-scan' ? 'true' : 'false' %>">Manifest</div>
-        <div class="tab <%= activeTab === 'generate' ? 'active' : '' %>" id="generate-tab" data-bs-toggle="tab" data-bs-target="#generate" role="tab" aria-controls="generate" aria-selected="<%= activeTab === 'generate' ? 'true' : 'false' %>">Generate</div>
-        <div class="tab" id="bulk-task-tab" data-bs-toggle="tab" data-bs-target="#bulk-task" role="tab" aria-controls="bulk-task" aria-selected="false">Bulk Task</div>
-        <div class="tab" id="scanner-tab" data-bs-toggle="tab" data-bs-target="#scanner" role="tab" aria-controls="scanner" aria-selected="false">Scanner</div>
-        <div class="tab" id="delimeter-tab" data-bs-toggle="tab" data-bs-target="#delimeter" role="tab" aria-controls="delimeter" aria-selected="false">Delimiter</div>
-        <div class="tab" id="brand-finder-tab" data-bs-toggle="tab" data-bs-target="#brand-finder" role="tab" aria-controls="brand-finder" aria-selected="false">Brand Finder</div>
-        <div class="tab" id="qrcode-tab" data-bs-toggle="tab" data-bs-target="#qrcode" role="tab" aria-controls="qrcode" aria-selected="false">QR Code</div>
       </div>
     </header>
 
@@ -443,7 +432,7 @@
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         Generate
       </div>
-      <div class="navitem" data-bs-toggle="modal" data-bs-target="#moreToolsModal">
+      <div class="navitem" data-tab="more-tab" data-bs-toggle="modal" data-bs-target="#moreToolsModal">
         <svg viewBox="0 0 24 24"><circle cx="5" cy="7" r="1.5"/><circle cx="5" cy="12" r="1.5"/><circle cx="5" cy="17" r="1.5"/><path d="M10 7h10M10 12h10M10 17h10"/></svg>
         More
       </div>

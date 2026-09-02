@@ -49,57 +49,39 @@ window.onload = (event) => {
 };
 
 function switchToTab(tabId) {
-  const tabEl = document.getElementById(tabId);
-  if (tabEl) {
-    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
-      bootstrap.Tab.getOrCreateInstance(tabEl).show();
-    } else if (typeof $ !== 'undefined' && $(tabEl).tab) {
-      $(tabEl).tab('show');
-    }
-    syncTabUI(tabId);
-  }
-}
+  if (!tabId) return;
+  const cleanId = tabId.replace('-tab', '');
 
-function syncTabUI(activeTabId) {
-  // Update top segmented tabs
-  $('.tabs .tab').removeClass('active').attr('aria-selected', 'false');
-  $('#' + activeTabId).addClass('active').attr('aria-selected', 'true');
-
-  // Scroll active tab into view if needed
-  const activeTabEl = document.getElementById(activeTabId);
-  if (activeTabEl && typeof activeTabEl.scrollIntoView === 'function') {
-    try {
-      activeTabEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-    } catch(e) {}
+  // 1. Switch visible tab pane in #nav-tabContent
+  $('#nav-tabContent .tab-pane').removeClass('show active');
+  const targetPane = $('#' + cleanId);
+  if (targetPane.length) {
+    targetPane.addClass('show active');
   }
 
-  // Update bottom nav
+  // 2. Update active states on bottom navbar
   $('.navbar .navitem, .navbar .navitem-center').removeClass('active');
-  $(`.navbar [data-tab="${activeTabId}"]`).addClass('active');
+  const matchingNav = $(`.navbar [data-tab="${cleanId}-tab"], .navbar [data-tab="${cleanId}"]`);
+  if (matchingNav.length) {
+    matchingNav.addClass('active');
+  } else {
+    // If it's a secondary tool in the modal (brand-finder, delimeter, qrcode), highlight 'More'
+    $(`.navbar [data-tab="more-tab"]`).addClass('active');
+  }
+
+  // 3. Scroll main view to top
+  const mainEl = document.querySelector('.main');
+  if (mainEl) {
+    mainEl.scrollTop = 0;
+  }
 }
 
 function initConsoleNavigation() {
-  // Sync when top tabs are clicked
-  $(document).on('click', '.tabs .tab', function () {
-    const tabId = $(this).attr('id');
-    if (tabId) {
-      switchToTab(tabId);
-    }
-  });
-
-  // Sync when bottom navbar items are clicked
-  $(document).on('click', '.navbar [data-tab]', function (e) {
+  // Handle bottom navbar clicks
+  $(document).on('click', '.navbar [data-tab]', function () {
     const tabId = $(this).attr('data-tab');
-    if (tabId) {
+    if (tabId && tabId !== 'more-tab' && tabId !== 'more') {
       switchToTab(tabId);
-    }
-  });
-
-  // Bootstrap native tab shown event listener
-  $(document).on('shown.bs.tab', function (e) {
-    const tabId = $(e.target).attr('id');
-    if (tabId) {
-      syncTabUI(tabId);
     }
   });
 
