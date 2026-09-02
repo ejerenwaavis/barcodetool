@@ -72,27 +72,58 @@ nav.navbar-dark.bg-dark {
 /* -------------------------------------------------- shell / layout -------------------------------------------------- */
 
 .app-shell {
-  max-width: 1080px;
+  max-width: 1100px;
   margin: 0 auto;
   padding-bottom: 6rem;
 }
 
-.container { width: 750px; text-align: left; }
+.container {
+  max-width: 960px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
 
-.app-header-block { padding-top: 2.5rem; }
+.app-header-block {
+  padding-top: 2rem;
+  padding-bottom: 1.5rem !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.app-header-block nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+#nav-tab {
+  border-bottom: none !important;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin: 0 auto;
+}
 
 /* -------------------------------------------------- tabs (segmented control) -------------------------------------------------- */
 
 .app-tabs {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   background: var(--surface-2);
   padding: 6px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
   justify-content: center;
+  align-items: center;
+  margin: 0 auto;
 }
 
 .app-tabs .nav-link {
@@ -452,3 +483,206 @@ textarea.form-control {
 #invalid { display: none; color: var(--danger); margin-top: 10px; font-size: 14pt; }
 .barcode-container { height: 200px; line-height: 200px; text-align: center; margin: 0 25px; }
 .center-text { text-align: center; }
+
+/* -------------------------------------------------- Preload Scan -------------------------------------------------- */
+
+.preload-card-wide {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 1.75rem;
+  max-width: 940px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.preload-dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.preload-dropzone:hover, .preload-dropzone.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.preload-dropzone i.bi-cloud-arrow-up {
+  font-size: 3.2rem;
+  color: var(--accent);
+  display: block;
+  margin-bottom: .6rem;
+}
+
+.preload-stat-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  text-align: center;
+}
+
+.preload-stat-val {
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-family: var(--mono);
+}
+
+.preload-stat-lbl {
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--text-sub);
+  margin-top: 4px;
+}
+
+.preload-active-display {
+  background: linear-gradient(145deg, #ffffff 0%, #f4f7ff 100%);
+  border: 2px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 30px rgba(47, 95, 219, .14);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+
+.preload-active-display::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent), #4f8bf9);
+}
+
+.preload-seq-badge {
+  display: inline-block;
+  font-size: 3.8rem;
+  font-weight: 800;
+  font-family: var(--mono);
+  color: var(--accent-strong);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 4px rgba(47, 95, 219, .15);
+  margin-bottom: .25rem;
+}
+
+.preload-address-text {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+  margin-bottom: .5rem;
+  word-break: break-word;
+}
+
+.preload-barcode-text {
+  font-family: var(--mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-sub);
+  letter-spacing: .05em;
+}
+
+.preload-cam-wrap {
+  position: relative;
+  background: #000;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  aspect-ratio: 4/3;
+  max-height: 340px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.preload-cam-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.preload-scan-box {
+  position: absolute;
+  left: 8%; right: 8%; top: 35%; bottom: 35%;
+  border: 2px solid rgba(47, 95, 219, .85);
+  border-radius: 10px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, .35);
+  pointer-events: none;
+}
+
+.preload-scan-box.flash {
+  border-color: var(--success);
+  animation: preloadFlash .35s ease;
+}
+
+@keyframes preloadFlash {
+  0% { box-shadow: 0 0 0 999px rgba(31, 157, 99, .4); }
+  100% { box-shadow: 0 0 0 999px rgba(0, 0, 0, .35); }
+}
+
+.preload-cam-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 16px;
+  color: var(--text-sub);
+  font-size: 14px;
+  background: var(--surface);
+}
+
+.preload-table-wrap {
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.preload-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  border-bottom: 2px solid var(--border);
+  z-index: 2;
+  font-size: .82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--text-sub);
+}
+
+.preload-row-scanned {
+  background-color: rgba(31, 157, 99, .06) !important;
+}
+
+.badge-prescanned {
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid rgba(31, 157, 99, .3);
+  font-weight: 600;
+  padding: .35em .75em;
+  border-radius: var(--radius-pill);
+}
+
+.badge-pending {
+  background: #f1f3f8;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  padding: .35em .75em;
+  border-radius: var(--radius-pill);
+}
+
