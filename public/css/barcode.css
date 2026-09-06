@@ -804,6 +804,13 @@ body {
   gap: 12px;
 }
 
+#batchBarcodeDisplay.scroll-mode {
+  grid-template-columns: 1fr;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
 .label-card {
   background: var(--surface);
   border: 1px solid var(--line);

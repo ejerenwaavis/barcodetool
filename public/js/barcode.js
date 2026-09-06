@@ -940,7 +940,7 @@ function processPreloadCsvContent(csvText, filename) {
       packages.push({
         id: 'pkg_' + (idx + 1),
         barcode: barcode.toUpperCase(),
-        seq: seq || String(idx + 1),
+        seq: seq || '?',
         address: address || 'No address specified',
         status: 'pending',
         scannedAt: null,
@@ -948,6 +948,30 @@ function processPreloadCsvContent(csvText, filename) {
       });
     }
   });
+
+  // Second pass to infer missing sequences based on street name
+  for (const pkg of packages) {
+    if (pkg.seq === '?') {
+      const targetUpper = pkg.address.toUpperCase();
+      const streetMatch = targetUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
+      let streetName = "";
+      if (streetMatch && streetMatch[1]) {
+        streetName = streetMatch[1].split(/(?:APT|UNIT|STE|#|SUITE|FL)\b/)[0].trim();
+      } else {
+        streetName = targetUpper.replace(/\d+/g, '').trim();
+      }
+      
+      if (streetName.length >= 4) {
+        for (const other of packages) {
+          const otherSeq = String(other.seq);
+          if (otherSeq !== '?' && !otherSeq.includes('.') && other.address.toUpperCase().includes(streetName)) {
+            pkg.seq = otherSeq + '.5';
+            break;
+          }
+        }
+      }
+    }
+  }
 
   if (!packages.length) {
     showToast('No valid barcodes found in manifest data', 'err');
@@ -1191,6 +1215,8 @@ function handlePreloadBarcodeScan(rawCode) {
   }
 
   let code = (rawCode || '').trim();
+  const originalRawCode = code; // Save for fuzzy address matching
+
   // Strip pipe delimiters from 2D/QR codes
   if (code.includes('|')) {
     code = code.split('|')[0];
@@ -1242,19 +1268,30 @@ function handlePreloadBarcodeScan(rawCode) {
     pkg.status = 'prescanned';
     pkg.scannedAt = Date.now();
 
+    let displaySeq = '#' + pkg.seq;
+    let displayAddr = pkg.address;
+    const parsedSeq = Number(pkg.seq);
+    if (String(pkg.seq) === '?' || (parsedSeq && !Number.isInteger(parsedSeq))) {
+      const baseNum = parseInt(pkg.seq);
+      if (!isNaN(baseNum)) {
+        displaySeq = '~' + baseNum;
+        displayAddr = 'Close to: ' + pkg.address;
+      }
+    }
+
     // Update prominent display box
-    $('#preloadLastSeq').text('#' + pkg.seq);
-    $('#preloadLastAddress').text(pkg.address);
+    $('#preloadLastSeq').text(displaySeq);
+    $('#preloadLastAddress').text(displayAddr);
     $('#preloadLastBarcode').text(pkg.barcode + ' · ' + new Date(pkg.scannedAt).toLocaleTimeString());
 
     if (isAlreadyScanned) {
       playPreloadAudio('duplicate');
       triggerPreloadHaptic();
-      showToast(`Already scanned: Seq #${pkg.seq} (${pkg.barcode})`, 'warn');
+      showToast(`Already scanned: Seq ${displaySeq} (${pkg.barcode})`, 'warn');
     } else {
       playPreloadAudio('success');
       triggerPreloadHaptic();
-      showToast(`Scanned Seq #${pkg.seq} (${pkg.barcode})`, 'ok');
+      showToast(`Scanned Seq ${displaySeq} (${pkg.barcode})`, 'ok');
     }
 
     savePreloadSession();
@@ -1268,13 +1305,48 @@ function handlePreloadBarcodeScan(rawCode) {
       setTimeout(() => row.removeClass('table-success'), 1200);
     }
   } else {
-    // Barcode not in manifest
+    // Barcode not in manifest, try fuzzy address match
+    let closestPkg = null;
+    if (originalRawCode && originalRawCode.length >= 10) {
+      const rawUpper = originalRawCode.toUpperCase();
+      let bestScore = 0;
+      
+      for (const p of preloadSession.packages) {
+        if (!p.address) continue;
+        const addressUpper = p.address.toUpperCase();
+        
+        // Extract street name
+        const streetMatch = addressUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
+        let streetName = "";
+        if (streetMatch && streetMatch[1]) {
+          streetName = streetMatch[1].split(/(?:APT|UNIT|STE|#|SUITE|FL)\b/)[0].trim();
+        } else {
+          streetName = addressUpper.replace(/\d+/g, '').trim();
+        }
+        
+        if (streetName.length >= 4 && rawUpper.includes(streetName)) {
+          if (streetName.length > bestScore) {
+            bestScore = streetName.length;
+            closestPkg = p;
+          }
+        }
+      }
+    }
+
     playPreloadAudio('unknown');
     triggerPreloadHaptic();
-    $('#preloadLastSeq').text('#???');
-    $('#preloadLastAddress').text('NOT FOUND IN PRELOAD MANIFEST');
-    $('#preloadLastBarcode').text(code + ' · Check package!');
-    showToast(`Barcode ${code} not in manifest!`, 'err');
+
+    if (closestPkg) {
+      $('#preloadLastSeq').text('~' + closestPkg.seq);
+      $('#preloadLastAddress').text('Close to: ' + closestPkg.address);
+      $('#preloadLastBarcode').text('UNSEQUENCED · ' + code);
+      showToast(`Not found, but close to #${closestPkg.seq}`, 'warn');
+    } else {
+      $('#preloadLastSeq').text('#???');
+      $('#preloadLastAddress').text('NOT FOUND IN PRELOAD MANIFEST');
+      $('#preloadLastBarcode').text(code + ' · Check package!');
+      showToast(`Barcode ${code} not in manifest!`, 'err');
+    }
   }
 }
 
