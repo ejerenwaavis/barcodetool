@@ -593,5 +593,16 @@
   <!-- Barcode Tool Engine -->
   <script defer src="<%= body.domain %>/js/barcode.js?v=<%= Date.now() %>"></script>
 
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('<%= body.domain %>/sw.js')
+          .then(reg => console.log('ServiceWorker registered'))
+          .catch(err => console.error('ServiceWorker registration failed: ', err));
+      });
+    }
+  </script>
+
   </body>
   </html>
