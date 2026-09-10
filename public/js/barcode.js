@@ -382,41 +382,44 @@ function transferDescription(evt){
 }
 
 function clearNameField() {
-  $("#barcodeDescription").val("");
-   $("#description").val("");
-   render();
-   renderModal();
+  $("#barcodeName").val("");
+  updateExportModal();
 }
 
-function printBarcode() {
-  if($("#description").val().length < 1){
-    $("#description").val(" ");
+function updateExportModal() {
+  const text = $("#barcodeNumber").val().toUpperCase().trim();
+  const filename = $("#barcodeName").val().trim();
+  
+  if (text) {
+    JsBarcode("#barcodeDuplicate", text, {
+      font: "Arial",
+      width: (text.length > 18) ? 1.4 : 1.7,
+      marginTop: 40,
+      height: 100,
+      displayValue: true
+    });
+    
+    const canvas = document.getElementById("barcodeDuplicate");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    
+    if (filename) {
+      ctx.font = "bold 16px Arial";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "black";
+      ctx.fillText(filename.toUpperCase(), canvas.width / 2, 24);
+    }
+    
+    const dt = canvas.toDataURL('image/png');
+    $("#downloadButton").attr("href", dt);
+    $("#downloadButton").attr("download", (filename || text) + ".png");
   }
-  window.print();
 }
 
-function downloadImage() {
-  var name = " ";
-  if($("#description").val().length > 0){
-    name = ($("#description").val()).toUpperCase();;
-  }
-  
-  var origanlCanvas = $("#barcode")[0];
-  var canvas = $("#barcode")[0];
-  const ctx = canvas.getContext("2d");
-
-
-  
-  ctx.font = "22px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText(name ,-110,24);
-  // console.log(ctx);
-  // console.log(ctx.width);
-
-  var dt = canvas.toDataURL('image/jpeg');
-  $("#downloadLink").attr("download", name) ;
-  $("#downloadLink").attr("href", dt) ;
-};
+// Bind to filename input changes
+$(document).ready(function() {
+  $("#barcodeName").on("input", updateExportModal);
+});
 
 function search(evt) {
   const tracking = ($(evt).val()).toUpperCase();
@@ -1578,6 +1581,36 @@ function sendPreloadToBulkTask() {
     showToast(`Loaded ${scannedPkgs.length} scanned package(s) into Bulk Task for final load scan`, 'ok');
   }, 300);
 }
+
+// Function to handle barcodes piped from the standalone scanner iframe
+window.sendScannerToBulkTask = function(barcodesArray) {
+  if (!barcodesArray || !barcodesArray.length) return;
+  
+  // The scanner array might contain just strings. If they are objects, map them.
+  // Assuming they are just strings (the lines array from scanner).
+  const entries = barcodesArray.filter(b => b.trim().length > 0);
+  
+  // Append to whatever is already in the bulk task text box, or overwrite
+  // It's usually best to append if they pipe multiple times, or overwrite if clean. 
+  // We will overwrite to be consistent with sendPreloadToBulkTask
+  $('#barcodesBatchText').val(entries.join('\n'));
+  
+  // Switch to Bulk Task tab
+  const bulkTabBtn = document.getElementById('bulk-task-tab');
+  if (bulkTabBtn) {
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(bulkTabBtn).show();
+    } else {
+      $(bulkTabBtn).tab('show');
+    }
+  }
+
+  // Automatically process batch so barcodes render immediately
+  setTimeout(() => {
+    processBatch();
+    showToast(`Loaded ${entries.length} scanned barcode(s) into Bulk Task`, 'ok');
+  }, 300);
+};
 
 function exportPreloadPdf() {
   if (!preloadSession || !preloadSession.packages) return;

@@ -128,9 +128,9 @@
   <textarea id="output" placeholder="Scanned barcodes will appear here, one per line. You can also paste a list of codes here directly, then tap Export as PDF to generate barcode images." spellcheck="false"></textarea>
 </main>
 
-<div class="bottomBar">
+<div class="bottomBar" style="grid-template-columns: 1fr 1fr;">
   <button id="copyBtn" class="primary">Copy All</button>
-  <button id="downloadBtn">Download .txt</button>
+  <button id="sendBulkBtn" class="primary" style="background:#198754;border-color:#198754;">Send to Bulk Task</button>
   <button id="pdfBtn">Export as PDF</button>
   <button id="clearBtn" class="danger">Clear</button>
 </div>
@@ -152,7 +152,7 @@
   const listCountEl = document.getElementById('listCount');
   const dupToggle = document.getElementById('dupToggle');
   const copyBtn = document.getElementById('copyBtn');
-  const downloadBtn = document.getElementById('downloadBtn');
+  const sendBulkBtn = document.getElementById('sendBulkBtn');
   const clearBtn = document.getElementById('clearBtn');
 
   let stream = null;
@@ -351,18 +351,16 @@
     }
   });
 
-  downloadBtn.addEventListener('click', ()=>{
-    if (!lines.length){ showToast('Nothing to download yet', 'err'); return; }
-    const blob = new Blob([lines.join('\n') + '\n'], {type:'text/plain'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
-    a.href = url;
-    a.download = 'barcodes-' + stamp + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  sendBulkBtn.addEventListener('click', ()=>{
+    if (!lines.length){ showToast('No barcodes to send to Bulk Task', 'err'); return; }
+    
+    // Call parent window function if it exists
+    if (window.parent && typeof window.parent.sendScannerToBulkTask === 'function') {
+      window.parent.sendScannerToBulkTask(lines);
+      showToast('Sent ' + lines.length + ' barcodes to Bulk Task', 'ok');
+    } else {
+      showToast('Cannot communicate with main app', 'err');
+    }
   });
 
   const pdfBtn = document.getElementById('pdfBtn');

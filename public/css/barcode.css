@@ -805,9 +805,10 @@ body {
 }
 
 #batchBarcodeDisplay.scroll-mode {
-  grid-template-columns: 1fr;
-  max-height: 60vh;
-  overflow-y: auto;
+  grid-template-columns: 1fr !important;
+  max-height: 60vh !important;
+  overflow-y: auto !important;
+  display: grid !important;
   padding-right: 5px;
 }
 
