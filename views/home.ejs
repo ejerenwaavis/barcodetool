@@ -275,6 +275,9 @@
                 <div class="scan-input-wrap flex-grow-1">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><rect x="9" y="9" width="6" height="6"/></svg>
                   <input type="text" id="barcodeNumber" style="text-transform:uppercase" class="scan-input mono" value="<%= (tracking ? tracking : '') %>" placeholder="Start typing tracking number..." aria-label="tracking">
+                  <button class="ocr-btn" type="button" title="Scan Text with Camera" onclick="triggerOCR('barcodeNumber')">
+                    <i class="bi bi-camera"></i>
+                  </button>
                 </div>
                 <button onclick="trackPackage()" id="trackPackageBtn" class="btn primary disabled" style="flex:0 0 auto; padding:10px 18px;">Track</button>
               </div>
@@ -297,8 +300,12 @@
                   <i class="bi bi-gear-fill" style="font-size:1.15rem;"></i>
                 </button>
               </div>
-              <div class="mb-3">
-                <input type="text" id="qrInput" class="scan-input" placeholder="Enter text or URL to generate QR code">
+              <div class="mb-3 scan-input-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><rect x="9" y="9" width="6" height="6"/></svg>
+                <input type="text" id="qrInput" class="scan-input mono" placeholder="Enter text or URL to generate QR code">
+                <button class="ocr-btn" type="button" title="Scan Text with Camera" onclick="triggerOCR('qrInput')">
+                  <i class="bi bi-camera"></i>
+                </button>
               </div>
               <!-- Settings Panel -->
               <div id="qrSettingsPanel" class="p-3 mb-3 rounded" style="display:none; background: var(--paper); border: 1px solid var(--line);">
@@ -592,6 +599,10 @@
   <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
   <!-- Barcode Tool Engine -->
   <script defer src="<%= body.domain %>/js/barcode.js?v=<%= Date.now() %>"></script>
+
+  <!-- OCR Hidden Input and Script -->
+  <input type="file" accept="image/*" capture="environment" id="ocrFileInput" class="d-none">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <!-- PWA Service Worker Registration -->
   <script>

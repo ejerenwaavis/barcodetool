@@ -660,6 +660,30 @@ body {
   transition: border-color .15s ease;
 }
 
+.ocr-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  cursor: pointer;
+  z-index: 2;
+  transition: background .15s ease;
+}
+.ocr-btn:active {
+  background: var(--line);
+}
+.scan-input-wrap .scan-input {
+  padding-right: 42px;
+}
 .scan-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);

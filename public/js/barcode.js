@@ -1728,3 +1728,40 @@ function exportPreloadPdf() {
   }, 40);
 }
 
+
+// --- OCR Scanner Logic ---
+let ocrTargetInputId = null;
+
+window.triggerOCR = function(inputId) {
+  ocrTargetInputId = inputId;
+  $('#ocrFileInput').click();
+};
+
+$(document).ready(function() {
+  $('#ocrFileInput').on('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+    showToast('Analyzing image for text...', 'ok');
+    try {
+      if (typeof Tesseract === 'undefined') {
+        showToast('OCR Library not loaded', 'err');
+        return;
+      }
+      const result = await Tesseract.recognize(file, 'eng');
+      let text = result.data.text.trim();
+      if (ocrTargetInputId === 'barcodeNumber') {
+         text = text.replace(/[^a-zA-Z0-9]/g, '');
+      }
+      if (text) {
+        $('#' + ocrTargetInputId).val(text).trigger('input');
+        showToast('Text scanned successfully!', 'ok');
+      } else {
+        showToast('No text found in image.', 'err');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('OCR processing failed.', 'err');
+    }
+  });
+});
