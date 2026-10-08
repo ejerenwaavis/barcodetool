@@ -1,0 +1,72 @@
+html,
+body {
+  height: 100%;
+}
+
+a{
+  text-decoration: none;
+}
+
+body {
+  background: linear-gradient(180deg, #eef3f9 0%, #dfe8f4 100%);
+  color: #1b2a41;
+  align-items: center;
+  padding-top: 40px;
+  padding-bottom: 40px;
+}
+
+.form-signin {
+  width: 100%;
+  max-width: 360px;
+  padding: 1.25rem;
+  margin: auto;
+  background: #ffffff;
+  border: 1px solid #d0d9e6;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 30px rgba(18, 42, 76, 0.1);
+}
+
+.form-signin .checkbox {
+  font-weight: 400;
+}
+
+.form-signin .form-floating:focus-within {
+  z-index: 2;
+}
+
+.form-signin input[type="email"] {
+  margin-bottom: -1px;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.form-signin input[type="password"] {
+  margin-bottom: 10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+
+.bg-fb {
+  background-color: #1f5fbf;
+}
+
+
+.bg-fb:hover {
+  background-color: #154a97;
+}
+
+.profile-icon{
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+}
+
+.text-disabled{
+  color: #bcbcbc;
+}
+
+.stops{
+    height: 450px;
+    overflow-y: auto;
+}
