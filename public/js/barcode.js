@@ -1773,14 +1773,21 @@ let ocrStream = null;
 let currentOcrTargetId = 'barcodeNumber';
 let ocrTorchActive = false;
 let ocrModalInstance = null;
+let uploadedImgObject = null;
+let currentCropPercent = 50;
+let detectedBarcodeCandidates = [];
 
 function openSlimOcrReader(targetInputId) {
   currentOcrTargetId = targetInputId || 'barcodeNumber';
-  
+  detectedBarcodeCandidates = [];
+
   // Reset UI
+  returnToOcrLiveCamera();
   $('#ocrResultArea').hide();
   $('#ocrActionRow').show();
   $('#ocrDetectedInput').val('');
+  $('#ocrCandidateSection').hide();
+  $('#ocrCandidateList').empty();
   $('#ocrCamStatus').show();
   $('#ocrCamStatusText').text('Starting camera...');
   $('#ocrTorchBtn').hide();
@@ -1866,10 +1873,126 @@ function closeSlimOcrReader() {
 function resumeOcrCamera() {
   $('#ocrResultArea').slideUp('fast');
   $('#ocrActionRow').slideDown('fast');
-  $('#ocrCaptureBtn').prop('disabled', false).html('<i class="bi bi-camera-fill me-1"></i>Capture & Read');
+  $('#ocrCaptureBtn').prop('disabled', false).html('<i class="bi bi-camera-fill me-2 fs-5"></i><span>Capture & Read</span>');
 }
 
-// Extract slim crop from video or image
+function returnToOcrLiveCamera() {
+  $('#ocrUploadContainer').hide();
+  $('#ocrLiveCamSection').show();
+  $('#ocrActionRow').show();
+  $('#ocrResultArea').hide();
+  startOcrCamera();
+}
+
+// --------------------- Interactive Upload & Cropper ---------------------
+
+function handleOcrImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  // Stop live video to save battery and memory
+  if (ocrStream) {
+    ocrStream.getTracks().forEach(t => t.stop());
+    ocrStream = null;
+  }
+
+  $('#ocrLiveCamSection').hide();
+  $('#ocrActionRow').hide();
+  $('#ocrResultArea').hide();
+  $('#ocrUploadContainer').slideDown('fast');
+
+  const img = new Image();
+  img.onload = function() {
+    uploadedImgObject = img;
+    const uploadImgEl = document.getElementById('ocrUploadedImg');
+    uploadImgEl.src = img.src;
+
+    // Reset crop slider to 50%
+    currentCropPercent = 50;
+    $('#ocrCropSlider').val(50);
+    updateCropPositionFromSlider(50);
+  };
+  img.src = URL.createObjectURL(file);
+}
+
+function updateCropPositionFromSlider(val) {
+  currentCropPercent = parseInt(val, 10);
+  const cropBox = $('#ocrUploadCropBox');
+  cropBox.css('top', currentCropPercent + '%');
+  
+  let label = 'Center (' + currentCropPercent + '%)';
+  if (currentCropPercent < 35) label = 'Top (' + currentCropPercent + '%)';
+  else if (currentCropPercent > 65) label = 'Bottom (' + currentCropPercent + '%)';
+  $('#ocrCropPosLabel').text(label);
+}
+
+// Scan the interactive crop slit from uploaded image
+async function scanSelectedUploadArea() {
+  if (!uploadedImgObject) return;
+
+  const btn = $('#ocrScanSelectedBtn');
+  btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Scanning Slit...');
+  $('#ocrResultArea').slideDown('fast');
+  $('#ocrResultTypeBadge').text('Extracting...');
+  $('#ocrDetectedInput').val('Reading digits from slit...');
+
+  const img = uploadedImgObject;
+  const cropCanvas = document.createElement('canvas');
+  
+  // Height is 18% of image height
+  const slitH = Math.max(50, Math.floor(img.height * 0.18));
+  const slitW = Math.floor(img.width * 0.94);
+  const cropX = Math.floor((img.width - slitW) / 2);
+  
+  // Vertical position from slider percent
+  const centerTargetY = Math.floor(img.height * (currentCropPercent / 100));
+  const cropY = Math.max(0, Math.min(img.height - slitH, centerTargetY - Math.floor(slitH / 2)));
+
+  cropCanvas.width = slitW;
+  cropCanvas.height = slitH;
+  const ctx = cropCanvas.getContext('2d');
+  ctx.drawImage(img, cropX, cropY, slitW, slitH, 0, 0, slitW, slitH);
+
+  // Update snippet canvas
+  const snip = document.getElementById('ocrSnippetCanvas');
+  snip.width = slitW;
+  snip.height = slitH;
+  snip.getContext('2d').drawImage(cropCanvas, 0, 0);
+
+  await processCroppedOcrImage(cropCanvas);
+  btn.prop('disabled', false).html('<i class="bi bi-crop me-1"></i>Scan Selected Slit');
+}
+
+// Scan entire uploaded picture for all barcodes & tracking numbers
+async function scanEntireUploadImage() {
+  if (!uploadedImgObject) return;
+
+  const btn = $('#ocrScanFullBtn');
+  btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Scanning Full Picture...');
+  $('#ocrResultArea').slideDown('fast');
+  $('#ocrResultTypeBadge').text('Full Scan...');
+  $('#ocrDetectedInput').val('Searching entire image for barcodes & tracking numbers...');
+
+  const img = uploadedImgObject;
+  const fullCanvas = document.createElement('canvas');
+  fullCanvas.width = img.width;
+  fullCanvas.height = img.height;
+  const ctx = fullCanvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+
+  // Show full image preview on snippet canvas
+  const snip = document.getElementById('ocrSnippetCanvas');
+  snip.width = img.width;
+  snip.height = img.height;
+  snip.getContext('2d').drawImage(fullCanvas, 0, 0);
+
+  await scanFullImageForCandidates(fullCanvas);
+  btn.prop('disabled', false).html('<i class="bi bi-aspect-ratio me-1"></i>Scan Full Picture');
+}
+
+// --------------------- Live Video Capture ---------------------
+
 async function captureAndExtractSlimOcr() {
   const video = document.getElementById('ocrVideo');
   const aimBox = document.getElementById('ocrAimBox');
@@ -1881,7 +2004,7 @@ async function captureAndExtractSlimOcr() {
     return;
   }
 
-  captureBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Scanning slit...');
+  captureBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span><span>Scanning...</span>');
   $('#ocrResultArea').slideDown('fast');
   $('#ocrResultTypeBadge').text('Extracting...');
   $('#ocrDetectedInput').val('Reading digits...');
@@ -1890,7 +2013,6 @@ async function captureAndExtractSlimOcr() {
   const videoRect = video.getBoundingClientRect();
   const boxRect = aimBox.getBoundingClientRect();
 
-  // Video element display dimensions vs native resolution with object-fit: cover
   const displayW = videoRect.width;
   const displayH = videoRect.height;
   const nativeW = video.videoWidth;
@@ -1902,76 +2024,86 @@ async function captureAndExtractSlimOcr() {
   const offsetX = (renderedW - displayW) / 2;
   const offsetY = (renderedH - displayH) / 2;
 
-  // Box coordinates relative to rendered video
   const boxXOnRendered = (boxRect.left - videoRect.left) + offsetX;
   const boxYOnRendered = (boxRect.top - videoRect.top) + offsetY;
 
-  // Convert to native video pixel coordinates
   const cropX = Math.max(0, Math.floor(boxXOnRendered / scale));
   const cropY = Math.max(0, Math.floor(boxYOnRendered / scale));
   const cropW = Math.min(nativeW - cropX, Math.floor(boxRect.width / scale));
   const cropH = Math.min(nativeH - cropY, Math.floor(boxRect.height / scale));
 
-  // Offscreen canvas for cropped slice
   const cropCanvas = document.createElement('canvas');
   cropCanvas.width = cropW;
   cropCanvas.height = cropH;
   const ctx = cropCanvas.getContext('2d');
   ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-  // Show snippet preview
   snippetCanvas.width = cropW;
   snippetCanvas.height = cropH;
   const snipCtx = snippetCanvas.getContext('2d');
   snipCtx.drawImage(cropCanvas, 0, 0);
 
   await processCroppedOcrImage(cropCanvas);
-  captureBtn.prop('disabled', false).html('<i class="bi bi-camera-fill me-1"></i>Capture & Read');
+  captureBtn.prop('disabled', false).html('<i class="bi bi-camera-fill me-2 fs-5"></i><span>Capture & Read</span>');
 }
 
-// Process cropped image with BarcodeDetector/ZXing + Tesseract PSM 7
-async function processCroppedOcrImage(cropCanvas) {
-  let detectedCode = null;
-  let detectionSource = '';
+// --------------------- Decoding & Extraction Core ---------------------
 
-  // 1. Try Barcode Detector on cropped snippet first (instant, exact 100% precision)
+async function decodeBarcodeFromCanvas(canvas) {
+  // 1. Native BarcodeDetector
   if ('BarcodeDetector' in window) {
     try {
       const detector = new BarcodeDetector({
         formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'upc_a', 'qr_code', 'data_matrix', 'pdf417']
       });
-      const codes = await detector.detect(cropCanvas);
+      const codes = await detector.detect(canvas);
       if (codes && codes.length > 0 && codes[0].rawValue) {
-        detectedCode = codes[0].rawValue;
-        detectionSource = 'Barcode 100%';
+        return codes[0].rawValue;
       }
     } catch(e) {}
   }
 
-  // Fallback to ZXing on snippet if available
-  if (!detectedCode && typeof ZXing !== 'undefined') {
+  // 2. ZXing low-level Canvas Luminance Source (synchronous & blazing fast)
+  if (typeof ZXing !== 'undefined') {
+    try {
+      const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(canvas);
+      const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+      const reader = new ZXing.MultiFormatReader();
+      const result = reader.decode(binaryBitmap);
+      if (result && result.getText()) {
+        return result.getText();
+      }
+    } catch(e) {}
+
+    // 3. ZXing BrowserMultiFormatReader via Image element
     try {
       const zxReader = new ZXing.BrowserMultiFormatReader();
-      const zxResult = await zxReader.decodeFromCanvas(cropCanvas);
-      if (zxResult && zxResult.getText()) {
-        detectedCode = zxResult.getText();
-        detectionSource = 'Barcode 100%';
+      const img = new Image();
+      img.src = canvas.toDataURL('image/png');
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+      const res = await zxReader.decodeFromImageElement(img);
+      if (res && res.getText()) {
+        return res.getText();
       }
     } catch(e) {}
   }
 
-  // 2. If no barcode decoded, run Tesseract OCR on the slim text line
-  if (!detectedCode) {
-    if (typeof Tesseract === 'undefined') {
-      $('#ocrResultTypeBadge').text('OCR Unavailable');
-      $('#ocrDetectedInput').val('Tesseract OCR library not loaded');
-      return;
-    }
+  return null;
+}
 
+// Process a single cropped strip (Barcode + Tesseract PSM 7)
+async function processCroppedOcrImage(cropCanvas) {
+  let detectedCode = await decodeBarcodeFromCanvas(cropCanvas);
+  let detectionSource = detectedCode ? 'Barcode 100%' : '';
+  const candidates = [];
+
+  if (detectedCode) {
+    candidates.push({ code: detectedCode, type: 'Barcode' });
+  }
+
+  // If no barcode or to find additional tracking digits, run Tesseract OCR
+  if (typeof Tesseract !== 'undefined') {
     try {
-      $('#ocrResultTypeBadge').text('OCR Analyzing...');
-      
-      // Preprocess image for OCR: upscale small crops and enhance contrast
       const processedCanvas = document.createElement('canvas');
       const targetH = Math.max(120, cropCanvas.height * 2);
       const targetW = Math.round(cropCanvas.width * (targetH / cropCanvas.height));
@@ -1980,80 +2112,172 @@ async function processCroppedOcrImage(cropCanvas) {
       const pCtx = processedCanvas.getContext('2d');
       pCtx.drawImage(cropCanvas, 0, 0, targetW, targetH);
       
-      // Grayscale & contrast stretch
       const imgData = pCtx.getImageData(0, 0, targetW, targetH);
       const d = imgData.data;
       for (let i = 0; i < d.length; i += 4) {
         const v = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
         const binary = v > 135 ? 255 : 0;
-        d[i] = binary;
-        d[i+1] = binary;
-        d[i+2] = binary;
+        d[i] = binary; d[i+1] = binary; d[i+2] = binary;
       }
       pCtx.putImageData(imgData, 0, 0);
 
-      // Run Tesseract with PSM 7 (single line of text)
-      const res = await Tesseract.recognize(processedCanvas, 'eng', {
-        tessedit_pageseg_mode: '7'
-      });
+      const res = await Tesseract.recognize(processedCanvas, 'eng', { tessedit_pageseg_mode: '7' });
       const rawOcr = (res && res.data && res.data.text) ? res.data.text.trim() : '';
 
       if (rawOcr) {
-        detectedCode = cleanExtractedTrackingNumber(rawOcr);
-        detectionSource = 'OCR Text Line';
+        const extracted = extractBarcodeCandidatesFromText(rawOcr);
+        extracted.forEach(item => {
+          if (!candidates.find(c => c.code === item.code)) {
+            candidates.push(item);
+          }
+        });
+        if (!detectedCode && candidates.length > 0) {
+          detectedCode = candidates[0].code;
+          detectionSource = candidates[0].type || 'OCR Text Line';
+        }
       }
     } catch(err) {
-      console.error('Tesseract OCR Error:', err);
+      console.warn('OCR processing error:', err);
     }
   }
 
-  // 3. Update Result View
-  if (detectedCode) {
-    $('#ocrResultTypeBadge').text(detectionSource).css('background', 'var(--success)');
-    $('#ocrDetectedInput').val(detectedCode);
-    showToast('Detected: ' + detectedCode, 'ok');
+  displayDetectedResults(detectedCode, detectionSource, candidates);
+}
+
+// Scan entire picture: searches barcodes across the whole image + runs full OCR
+async function scanFullImageForCandidates(fullCanvas) {
+  const candidates = [];
+
+  // 1. Decode barcode from full image
+  const fullBarcode = await decodeBarcodeFromCanvas(fullCanvas);
+  if (fullBarcode) {
+    candidates.push({ code: fullBarcode, type: 'Barcode' });
+  }
+
+  // 2. Decode multiple horizontal strips (in case barcode is elsewhere on label)
+  const stripCount = 4;
+  const stripH = Math.floor(fullCanvas.height / stripCount);
+  for (let s = 0; s < stripCount; s++) {
+    const sCanvas = document.createElement('canvas');
+    sCanvas.width = fullCanvas.width;
+    sCanvas.height = stripH;
+    sCanvas.getContext('2d').drawImage(fullCanvas, 0, s * stripH, fullCanvas.width, stripH, 0, 0, fullCanvas.width, stripH);
+    const stripCode = await decodeBarcodeFromCanvas(sCanvas);
+    if (stripCode && !candidates.find(c => c.code === stripCode)) {
+      candidates.push({ code: stripCode, type: 'Barcode' });
+    }
+  }
+
+  // 3. Run full-image OCR and parse lines for tracking numbers / barcodes
+  if (typeof Tesseract !== 'undefined') {
+    try {
+      const res = await Tesseract.recognize(fullCanvas, 'eng');
+      const text = (res && res.data && res.data.text) ? res.data.text : '';
+      if (text) {
+        const found = extractBarcodeCandidatesFromText(text);
+        found.forEach(item => {
+          if (!candidates.find(c => c.code === item.code)) {
+            candidates.push(item);
+          }
+        });
+      }
+    } catch(e) {
+      console.warn('Full image OCR error:', e);
+    }
+  }
+
+  const primaryCode = candidates.length > 0 ? candidates[0].code : null;
+  const primaryType = candidates.length > 0 ? candidates[0].type : '';
+  displayDetectedResults(primaryCode, primaryType, candidates);
+}
+
+// Intelligent extractor: converts text into clean list of candidate barcodes/tracking numbers (no clustered words!)
+function extractBarcodeCandidatesFromText(text) {
+  if (!text) return [];
+  const list = [];
+  const seen = new Set();
+
+  function addCandidate(code, carrier) {
+    const clean = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (clean.length >= 7 && !seen.has(clean)) {
+      seen.add(clean);
+      list.push({ code: clean, type: carrier });
+    }
+  }
+
+  // Known carrier regexes
+  const onTracMatches = text.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12})/gi) || [];
+  onTracMatches.forEach(m => addCandidate(m, 'OnTrac'));
+
+  const spxMatches = text.match(/(SPX[A-Za-z0-9]{8,24})/gi) || [];
+  spxMatches.forEach(m => addCandidate(m, 'SpeedX'));
+
+  const upsMatches = text.match(/(1Z[A-Za-z0-9]{16})/gi) || [];
+  upsMatches.forEach(m => addCandidate(m, 'UPS'));
+
+  const fedexMatches = text.match(/\b(\d{12}|\d{15}|\d{20}|\d{22})\b/g) || [];
+  fedexMatches.forEach(m => addCandidate(m, 'FedEx'));
+
+  const uspsMatches = text.match(/\b(9[1-5]\d{20,24}|\d{20,30}|420\d{20,30})\b/g) || [];
+  uspsMatches.forEach(m => addCandidate(m, 'USPS'));
+
+  const tbaMatches = text.match(/(TBA[0-9]{12})/gi) || [];
+  tbaMatches.forEach(m => addCandidate(m, 'Amazon'));
+
+  // Split lines and tokens to find other clean numbers / barcodes
+  const stopWords = new Set(['DELIVERY', 'STREET', 'AVENUE', 'WEIGHT', 'POUNDS', 'CUSTOMER', 'ATLANTA', 'GEORGIA', 'PRIORITY', 'GROUND', 'PACKAGE', 'CARRIER', 'SERVICE', 'ADDRESS', 'SUITE', 'TRACKING', 'NUMBER', 'SHIPTO', 'RETURN']);
+  const tokens = text.split(/[\s,\-_|/\\:;\n\r]+/);
+  for (const t of tokens) {
+    const clean = t.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (clean.length >= 8 && clean.length <= 34) {
+      if (!stopWords.has(clean)) {
+        // Must contain at least 2 digits to qualify as a barcode or tracking number
+        const digitCount = (clean.match(/\d/g) || []).length;
+        if (digitCount >= 2 && !seen.has(clean)) {
+          addCandidate(clean, 'Tracking #');
+        }
+      }
+    }
+  }
+
+  return list;
+}
+
+// Display results and candidate pills
+function displayDetectedResults(primaryCode, primaryType, candidates) {
+  const candidateSec = $('#ocrCandidateSection');
+  const candidateList = $('#ocrCandidateList');
+  candidateList.empty();
+
+  if (candidates && candidates.length > 0) {
+    candidateSec.show();
+    candidates.forEach((c, idx) => {
+      const isSelected = (c.code === primaryCode) || (idx === 0);
+      const activeClass = isSelected ? ' active' : '';
+      const badgeText = c.type || 'Code';
+      const pill = $('<button type="button" class="ocr-candidate-pill' + activeClass + '" onclick="selectOcrCandidate(\'' + c.code + '\', this)"><i class="bi bi-upc-scan me-1"></i><span>' + c.code + '</span><span class="carrier-badge">' + badgeText + '</span></button>');
+      candidateList.append(pill);
+    });
   } else {
-    $('#ocrResultTypeBadge').text('No Code Found').css('background', 'var(--warn)');
-    $('#ocrDetectedInput').val('').attr('placeholder', 'No text found. Re-align slit and try again.');
-    showToast('Could not isolate numbers. Try aiming closer.', 'warn');
+    candidateSec.hide();
+  }
+
+  if (primaryCode) {
+    $('#ocrResultTypeBadge').text(primaryType || 'Detected').css('background', 'var(--success)');
+    $('#ocrDetectedInput').val(primaryCode);
+    showToast('Detected: ' + primaryCode, 'ok');
+  } else {
+    $('#ocrResultTypeBadge').text('No Barcode Found').css('background', 'var(--warn)');
+    $('#ocrDetectedInput').val('').attr('placeholder', 'No barcode found. Adjust slit or try another photo.');
+    showToast('Could not find barcode. Adjust slit and tap Scan.', 'warn');
   }
 }
 
-// Clean and extract tracking number patterns
-function cleanExtractedTrackingNumber(text) {
-  if (!text) return '';
-  text = text.trim();
-
-  // Check known carrier patterns
-  const onTracMatch = text.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12})/i);
-  if (onTracMatch) return onTracMatch[1].toUpperCase();
-
-  const spxMatch = text.match(/(SPX[A-Za-z0-9]{8,24})/i);
-  if (spxMatch) return spxMatch[1].toUpperCase();
-
-  const upsMatch = text.match(/(1Z[A-Za-z0-9]{16})/i);
-  if (upsMatch) return upsMatch[1].toUpperCase();
-
-  const fedexMatch = text.match(/\b(\d{12}|\d{15}|\d{20}|\d{22})\b/);
-  if (fedexMatch) return fedexMatch[1];
-
-  const uspsMatch = text.match(/\b(9[1-5]\d{20,24}|\d{20,30})\b/);
-  if (uspsMatch) return uspsMatch[1];
-
-  const tbaMatch = text.match(/(TBA[0-9]{12})/i);
-  if (tbaMatch) return tbaMatch[1].toUpperCase();
-
-  // Fallback: extract the longest alphanumeric continuous token (at least 6 chars)
-  const tokens = text.split(/[\s,\-_|/\\:;]+/);
-  let best = '';
-  for (const t of tokens) {
-    const clean = t.replace(/[^A-Za-z0-9]/g, '');
-    if (clean.length > best.length && clean.length >= 6) {
-      best = clean;
-    }
-  }
-
-  return (best || text.replace(/[^A-Za-z0-9]/g, '')).toUpperCase();
+function selectOcrCandidate(code, btnEl) {
+  $('#ocrDetectedInput').val(code);
+  $('.ocr-candidate-pill').removeClass('active');
+  if (btnEl) $(btnEl).addClass('active');
+  showToast('Selected ' + code, 'ok');
 }
 
 function applyOcrResult() {
@@ -2070,37 +2294,4 @@ function applyOcrResult() {
   }
 
   closeSlimOcrReader();
-}
-
-// Fallback image upload from gallery
-async function handleOcrImageUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  e.target.value = '';
-
-  $('#ocrResultArea').slideDown('fast');
-  $('#ocrResultTypeBadge').text('Loading Image...');
-  $('#ocrDetectedInput').val('Processing uploaded image...');
-
-  const img = new Image();
-  img.onload = async function() {
-    const cropCanvas = document.createElement('canvas');
-    const cropH = Math.max(60, Math.floor(img.height * 0.22));
-    const cropW = Math.floor(img.width * 0.88);
-    const cropX = Math.floor((img.width - cropW) / 2);
-    const cropY = Math.floor((img.height - cropH) / 2);
-
-    cropCanvas.width = cropW;
-    cropCanvas.height = cropH;
-    const ctx = cropCanvas.getContext('2d');
-    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-    const snip = document.getElementById('ocrSnippetCanvas');
-    snip.width = cropW;
-    snip.height = cropH;
-    snip.getContext('2d').drawImage(cropCanvas, 0, 0);
-
-    await processCroppedOcrImage(cropCanvas);
-  };
-  img.src = URL.createObjectURL(file);
 }
