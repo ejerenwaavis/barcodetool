@@ -10,7 +10,8 @@ const copies = [
   { from: path.join(publicDir, "css", "login.css"), to: path.join(distDir, "css", "login.css") },
   { from: path.join(publicDir, "js", "barcode.js"), to: path.join(distDir, "js", "barcode.js") },
   { from: path.join(publicDir, "manifest.json"), to: path.join(distDir, "manifest.json") },
-  { from: path.join(publicDir, "sw.js"), to: path.join(distDir, "sw.js") }
+  { from: path.join(publicDir, "sw.js"), to: path.join(distDir, "sw.js") },
+  { from: path.join(publicDir, "scanner.html"), to: path.join(distDir, "scanner.html") }
 ];
 
 fs.mkdirSync(path.join(distDir, "css"), { recursive: true });

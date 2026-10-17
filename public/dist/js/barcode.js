@@ -669,6 +669,7 @@ let preloadStatusFilter = 'all';
 
 let preloadStream = null;
 let preloadDetector = null;
+let preloadZxingReader = null;
 let preloadScanning = false;
 let preloadPaused = false;
 let preloadLastCode = null;
@@ -1284,6 +1285,7 @@ function handlePreloadBarcodeScan(rawCode) {
 
     // Update prominent display box
     $('#preloadLastSeq').text(displaySeq);
+    $('#preloadSeqStatus').text(isAlreadyScanned ? 'ALREADY SCANNED' : 'MATCH · SAVED');
     $('#preloadLastAddress').text(displayAddr);
     $('#preloadLastBarcode').text(pkg.barcode + ' · ' + new Date(pkg.scannedAt).toLocaleTimeString());
 
@@ -1341,11 +1343,13 @@ function handlePreloadBarcodeScan(rawCode) {
 
     if (closestPkg) {
       $('#preloadLastSeq').text('~' + closestPkg.seq);
+      $('#preloadSeqStatus').text('CLOSE MATCH');
       $('#preloadLastAddress').text('Close to: ' + closestPkg.address);
       $('#preloadLastBarcode').text('UNSEQUENCED · ' + code);
       showToast(`Not found, but close to #${closestPkg.seq}`, 'warn');
     } else {
       $('#preloadLastSeq').text('#???');
+      $('#preloadSeqStatus').text('NOT IN MANIFEST');
       $('#preloadLastAddress').text('NOT FOUND IN PRELOAD MANIFEST');
       $('#preloadLastBarcode').text(code + ' · Check package!');
       showToast(`Barcode ${code} not in manifest!`, 'err');
@@ -1388,19 +1392,22 @@ function togglePreloadCamera() {
 }
 
 async function startPreloadCamera() {
-  const section = $('#preloadCamSection');
+  const wrap = $('#preloadCamWrap');
+  const placeholder = $('#preloadCamPlaceholder');
   const btnText = $('#preloadCamBtnText');
   const status = $('#preloadCamStatus');
   const statusText = $('#preloadCamStatusText');
   const video = document.getElementById('preloadVideo');
 
-  section.slideDown('fast');
+  placeholder.hide();
+  wrap.show();
   status.show();
-  statusText.text('Requesting camera permission...');
-  btnText.text('Stop Camera Scanner');
+  statusText.text('Starting camera...');
+  btnText.text('Turn Camera Off');
+  $('#preloadSeqStatus').text('Camera active');
 
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    statusText.text('Camera access not supported on this browser/device.');
+    statusText.text('Camera access not supported on this browser.');
     return;
   }
 
@@ -1412,37 +1419,70 @@ async function startPreloadCamera() {
     video.srcObject = preloadStream;
     await video.play();
   } catch (err) {
-    statusText.text('Camera access failed: ' + (err.message || err.name));
+    statusText.text('Camera failed: ' + (err.message || err.name));
     return;
   }
 
   if (!('BarcodeDetector' in window)) {
-    statusText.text('Built-in BarcodeDetector not available in this browser. You can use a USB/Bluetooth wedge scanner or enter codes manually.');
-    return;
-  }
-
-  const FORMATS = ['code_128', 'code_39', 'code_93', 'ean_13', 'upc_a', 'qr_code', 'pdf417', 'data_matrix'];
-  try {
-    preloadDetector = new BarcodeDetector({ formats: FORMATS });
-  } catch (e) {
-    preloadDetector = new BarcodeDetector();
+    if (typeof ZXing !== 'undefined') {
+      try {
+        preloadZxingReader = new ZXing.BrowserMultiFormatReader();
+      } catch (e) {
+        console.warn('ZXing init error:', e);
+      }
+    }
+    if (!preloadZxingReader) {
+      statusText.text('Built-in BarcodeDetector not available. Tap to use wedge scanner or enter codes.');
+      return;
+    }
+  } else {
+    const FORMATS = ['code_128', 'code_39', 'code_93', 'ean_13', 'upc_a', 'qr_code', 'pdf417', 'data_matrix'];
+    try {
+      preloadDetector = new BarcodeDetector({ formats: FORMATS });
+    } catch (e) {
+      preloadDetector = new BarcodeDetector();
+    }
   }
 
   status.hide();
   preloadScanning = true;
   preloadPaused = false;
-  loopPreloadCamera();
+
+  if (preloadZxingReader) {
+    preloadZxingReader.decodeFromVideoElement(video, (result, err) => {
+      if (!preloadScanning || preloadPaused) return;
+      if (result && result.getText()) {
+        const cVal = result.getText();
+        const now = Date.now();
+        if (cVal === preloadLastCode && (now - preloadLastCodeTime) < PRELOAD_REPEAT_WINDOW) {
+          return;
+        }
+        preloadLastCode = cVal;
+        preloadLastCodeTime = now;
+        handlePreloadBarcodeScan(cVal);
+      }
+    });
+  } else {
+    loopPreloadCamera();
+  }
 }
 
 function stopPreloadCamera() {
   preloadScanning = false;
+  if (preloadZxingReader) {
+    try { preloadZxingReader.reset(); } catch(e) {}
+    preloadZxingReader = null;
+  }
   if (preloadStream) {
     preloadStream.getTracks().forEach(track => track.stop());
     preloadStream = null;
   }
-  $('#preloadCamSection').slideUp('fast');
-  $('#preloadCamBtnText').text('Start Camera Scanner');
+  $('#preloadCamWrap').hide();
+  $('#preloadCamPlaceholder').show();
+  $('#preloadCamBtnText').text('Turn Camera On');
+  $('#preloadSeqStatus').text('Ready for scan');
 }
+
 
 async function loopPreloadCamera() {
   if (!preloadScanning) return;
@@ -1728,40 +1768,339 @@ function exportPreloadPdf() {
   }, 40);
 }
 
+// --- Slim-Line OCR & Barcode Reader Logic ---
+let ocrStream = null;
+let currentOcrTargetId = 'barcodeNumber';
+let ocrTorchActive = false;
+let ocrModalInstance = null;
 
-// --- OCR Scanner Logic ---
-let ocrTargetInputId = null;
+function openSlimOcrReader(targetInputId) {
+  currentOcrTargetId = targetInputId || 'barcodeNumber';
+  
+  // Reset UI
+  $('#ocrResultArea').hide();
+  $('#ocrActionRow').show();
+  $('#ocrDetectedInput').val('');
+  $('#ocrCamStatus').show();
+  $('#ocrCamStatusText').text('Starting camera...');
+  $('#ocrTorchBtn').hide();
+  ocrTorchActive = false;
 
-window.triggerOCR = function(inputId) {
-  ocrTargetInputId = inputId;
-  $('#ocrFileInput').click();
-};
+  const modalEl = document.getElementById('ocrReaderModal');
+  if (window.bootstrap && bootstrap.Modal) {
+    ocrModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+    ocrModalInstance.show();
+  } else {
+    $('#ocrReaderModal').modal('show');
+  }
 
-$(document).ready(function() {
-  $('#ocrFileInput').on('change', async function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = '';
-    showToast('Analyzing image for text...', 'ok');
-    try {
-      if (typeof Tesseract === 'undefined') {
-        showToast('OCR Library not loaded', 'err');
-        return;
-      }
-      const result = await Tesseract.recognize(file, 'eng');
-      let text = result.data.text.trim();
-      if (ocrTargetInputId === 'barcodeNumber') {
-         text = text.replace(/[^a-zA-Z0-9]/g, '');
-      }
-      if (text) {
-        $('#' + ocrTargetInputId).val(text).trigger('input');
-        showToast('Text scanned successfully!', 'ok');
-      } else {
-        showToast('No text found in image.', 'err');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('OCR processing failed.', 'err');
+  startOcrCamera();
+}
+
+async function startOcrCamera() {
+  const video = document.getElementById('ocrVideo');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('#ocrCamStatusText').text('Camera access not supported on this device.');
+    return;
+  }
+
+  if (ocrStream) {
+    ocrStream.getTracks().forEach(t => t.stop());
+    ocrStream = null;
+  }
+
+  try {
+    ocrStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    });
+    video.srcObject = ocrStream;
+    await video.play();
+    $('#ocrCamStatus').hide();
+
+    // Check torch support
+    const track = ocrStream.getVideoTracks()[0];
+    if (track && track.getCapabilities && track.getCapabilities().torch) {
+      $('#ocrTorchBtn').show();
     }
-  });
-});
+  } catch (err) {
+    console.error('OCR Camera Error:', err);
+    $('#ocrCamStatusText').text('Camera access failed: ' + (err.message || err.name));
+  }
+}
+
+async function toggleOcrTorch() {
+  if (!ocrStream) return;
+  const track = ocrStream.getVideoTracks()[0];
+  if (!track || !track.applyConstraints) return;
+  
+  ocrTorchActive = !ocrTorchActive;
+  try {
+    await track.applyConstraints({
+      advanced: [{ torch: ocrTorchActive }]
+    });
+    $('#ocrTorchBtn').toggleClass('btn-warning', ocrTorchActive);
+  } catch(e) {
+    console.warn('Torch toggle failed:', e);
+  }
+}
+
+function closeSlimOcrReader() {
+  if (ocrStream) {
+    ocrStream.getTracks().forEach(t => t.stop());
+    ocrStream = null;
+  }
+  const modalEl = document.getElementById('ocrReaderModal');
+  if (window.bootstrap && bootstrap.Modal) {
+    const inst = bootstrap.Modal.getInstance(modalEl);
+    if (inst) inst.hide();
+  } else {
+    $('#ocrReaderModal').modal('hide');
+  }
+}
+
+function resumeOcrCamera() {
+  $('#ocrResultArea').slideUp('fast');
+  $('#ocrActionRow').slideDown('fast');
+  $('#ocrCaptureBtn').prop('disabled', false).html('<i class="bi bi-camera-fill me-1"></i>Capture & Read');
+}
+
+// Extract slim crop from video or image
+async function captureAndExtractSlimOcr() {
+  const video = document.getElementById('ocrVideo');
+  const aimBox = document.getElementById('ocrAimBox');
+  const snippetCanvas = document.getElementById('ocrSnippetCanvas');
+  const captureBtn = $('#ocrCaptureBtn');
+
+  if (!video || !aimBox || video.videoWidth === 0 || video.videoHeight === 0) {
+    showToast('Camera feed not ready yet', 'warn');
+    return;
+  }
+
+  captureBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1"></span>Scanning slit...');
+  $('#ocrResultArea').slideDown('fast');
+  $('#ocrResultTypeBadge').text('Extracting...');
+  $('#ocrDetectedInput').val('Reading digits...');
+
+  // Compute bounding box of ocrAimBox relative to ocrVideo display area
+  const videoRect = video.getBoundingClientRect();
+  const boxRect = aimBox.getBoundingClientRect();
+
+  // Video element display dimensions vs native resolution with object-fit: cover
+  const displayW = videoRect.width;
+  const displayH = videoRect.height;
+  const nativeW = video.videoWidth;
+  const nativeH = video.videoHeight;
+
+  const scale = Math.max(displayW / nativeW, displayH / nativeH);
+  const renderedW = nativeW * scale;
+  const renderedH = nativeH * scale;
+  const offsetX = (renderedW - displayW) / 2;
+  const offsetY = (renderedH - displayH) / 2;
+
+  // Box coordinates relative to rendered video
+  const boxXOnRendered = (boxRect.left - videoRect.left) + offsetX;
+  const boxYOnRendered = (boxRect.top - videoRect.top) + offsetY;
+
+  // Convert to native video pixel coordinates
+  const cropX = Math.max(0, Math.floor(boxXOnRendered / scale));
+  const cropY = Math.max(0, Math.floor(boxYOnRendered / scale));
+  const cropW = Math.min(nativeW - cropX, Math.floor(boxRect.width / scale));
+  const cropH = Math.min(nativeH - cropY, Math.floor(boxRect.height / scale));
+
+  // Offscreen canvas for cropped slice
+  const cropCanvas = document.createElement('canvas');
+  cropCanvas.width = cropW;
+  cropCanvas.height = cropH;
+  const ctx = cropCanvas.getContext('2d');
+  ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+  // Show snippet preview
+  snippetCanvas.width = cropW;
+  snippetCanvas.height = cropH;
+  const snipCtx = snippetCanvas.getContext('2d');
+  snipCtx.drawImage(cropCanvas, 0, 0);
+
+  await processCroppedOcrImage(cropCanvas);
+  captureBtn.prop('disabled', false).html('<i class="bi bi-camera-fill me-1"></i>Capture & Read');
+}
+
+// Process cropped image with BarcodeDetector/ZXing + Tesseract PSM 7
+async function processCroppedOcrImage(cropCanvas) {
+  let detectedCode = null;
+  let detectionSource = '';
+
+  // 1. Try Barcode Detector on cropped snippet first (instant, exact 100% precision)
+  if ('BarcodeDetector' in window) {
+    try {
+      const detector = new BarcodeDetector({
+        formats: ['code_128', 'code_39', 'code_93', 'ean_13', 'upc_a', 'qr_code', 'data_matrix', 'pdf417']
+      });
+      const codes = await detector.detect(cropCanvas);
+      if (codes && codes.length > 0 && codes[0].rawValue) {
+        detectedCode = codes[0].rawValue;
+        detectionSource = 'Barcode 100%';
+      }
+    } catch(e) {}
+  }
+
+  // Fallback to ZXing on snippet if available
+  if (!detectedCode && typeof ZXing !== 'undefined') {
+    try {
+      const zxReader = new ZXing.BrowserMultiFormatReader();
+      const zxResult = await zxReader.decodeFromCanvas(cropCanvas);
+      if (zxResult && zxResult.getText()) {
+        detectedCode = zxResult.getText();
+        detectionSource = 'Barcode 100%';
+      }
+    } catch(e) {}
+  }
+
+  // 2. If no barcode decoded, run Tesseract OCR on the slim text line
+  if (!detectedCode) {
+    if (typeof Tesseract === 'undefined') {
+      $('#ocrResultTypeBadge').text('OCR Unavailable');
+      $('#ocrDetectedInput').val('Tesseract OCR library not loaded');
+      return;
+    }
+
+    try {
+      $('#ocrResultTypeBadge').text('OCR Analyzing...');
+      
+      // Preprocess image for OCR: upscale small crops and enhance contrast
+      const processedCanvas = document.createElement('canvas');
+      const targetH = Math.max(120, cropCanvas.height * 2);
+      const targetW = Math.round(cropCanvas.width * (targetH / cropCanvas.height));
+      processedCanvas.width = targetW;
+      processedCanvas.height = targetH;
+      const pCtx = processedCanvas.getContext('2d');
+      pCtx.drawImage(cropCanvas, 0, 0, targetW, targetH);
+      
+      // Grayscale & contrast stretch
+      const imgData = pCtx.getImageData(0, 0, targetW, targetH);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = 0.299 * d[i] + 0.587 * d[i+1] + 0.114 * d[i+2];
+        const binary = v > 135 ? 255 : 0;
+        d[i] = binary;
+        d[i+1] = binary;
+        d[i+2] = binary;
+      }
+      pCtx.putImageData(imgData, 0, 0);
+
+      // Run Tesseract with PSM 7 (single line of text)
+      const res = await Tesseract.recognize(processedCanvas, 'eng', {
+        tessedit_pageseg_mode: '7'
+      });
+      const rawOcr = (res && res.data && res.data.text) ? res.data.text.trim() : '';
+
+      if (rawOcr) {
+        detectedCode = cleanExtractedTrackingNumber(rawOcr);
+        detectionSource = 'OCR Text Line';
+      }
+    } catch(err) {
+      console.error('Tesseract OCR Error:', err);
+    }
+  }
+
+  // 3. Update Result View
+  if (detectedCode) {
+    $('#ocrResultTypeBadge').text(detectionSource).css('background', 'var(--success)');
+    $('#ocrDetectedInput').val(detectedCode);
+    showToast('Detected: ' + detectedCode, 'ok');
+  } else {
+    $('#ocrResultTypeBadge').text('No Code Found').css('background', 'var(--warn)');
+    $('#ocrDetectedInput').val('').attr('placeholder', 'No text found. Re-align slit and try again.');
+    showToast('Could not isolate numbers. Try aiming closer.', 'warn');
+  }
+}
+
+// Clean and extract tracking number patterns
+function cleanExtractedTrackingNumber(text) {
+  if (!text) return '';
+  text = text.trim();
+
+  // Check known carrier patterns
+  const onTracMatch = text.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12})/i);
+  if (onTracMatch) return onTracMatch[1].toUpperCase();
+
+  const spxMatch = text.match(/(SPX[A-Za-z0-9]{8,24})/i);
+  if (spxMatch) return spxMatch[1].toUpperCase();
+
+  const upsMatch = text.match(/(1Z[A-Za-z0-9]{16})/i);
+  if (upsMatch) return upsMatch[1].toUpperCase();
+
+  const fedexMatch = text.match(/\b(\d{12}|\d{15}|\d{20}|\d{22})\b/);
+  if (fedexMatch) return fedexMatch[1];
+
+  const uspsMatch = text.match(/\b(9[1-5]\d{20,24}|\d{20,30})\b/);
+  if (uspsMatch) return uspsMatch[1];
+
+  const tbaMatch = text.match(/(TBA[0-9]{12})/i);
+  if (tbaMatch) return tbaMatch[1].toUpperCase();
+
+  // Fallback: extract the longest alphanumeric continuous token (at least 6 chars)
+  const tokens = text.split(/[\s,\-_|/\\:;]+/);
+  let best = '';
+  for (const t of tokens) {
+    const clean = t.replace(/[^A-Za-z0-9]/g, '');
+    if (clean.length > best.length && clean.length >= 6) {
+      best = clean;
+    }
+  }
+
+  return (best || text.replace(/[^A-Za-z0-9]/g, '')).toUpperCase();
+}
+
+function applyOcrResult() {
+  const val = $('#ocrDetectedInput').val().trim();
+  if (!val) {
+    showToast('No text to use', 'warn');
+    return;
+  }
+
+  const targetInput = $('#' + currentOcrTargetId);
+  if (targetInput.length) {
+    targetInput.val(val).trigger('input');
+    showToast('Inserted ' + val, 'ok');
+  }
+
+  closeSlimOcrReader();
+}
+
+// Fallback image upload from gallery
+async function handleOcrImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  $('#ocrResultArea').slideDown('fast');
+  $('#ocrResultTypeBadge').text('Loading Image...');
+  $('#ocrDetectedInput').val('Processing uploaded image...');
+
+  const img = new Image();
+  img.onload = async function() {
+    const cropCanvas = document.createElement('canvas');
+    const cropH = Math.max(60, Math.floor(img.height * 0.22));
+    const cropW = Math.floor(img.width * 0.88);
+    const cropX = Math.floor((img.width - cropW) / 2);
+    const cropY = Math.floor((img.height - cropH) / 2);
+
+    cropCanvas.width = cropW;
+    cropCanvas.height = cropH;
+    const ctx = cropCanvas.getContext('2d');
+    ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+    const snip = document.getElementById('ocrSnippetCanvas');
+    snip.width = cropW;
+    snip.height = cropH;
+    snip.getContext('2d').drawImage(cropCanvas, 0, 0);
+
+    await processCroppedOcrImage(cropCanvas);
+  };
+  img.src = URL.createObjectURL(file);
+}

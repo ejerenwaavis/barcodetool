@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Barcode Scanner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<style>
+  :root{
+    --bg:#f8f9fa;
+    --panel:#ffffff;
+    --line:#dee2e6;
+    --text:#212529;
+    --sub:#6c757d;
+    --accent:#0d6efd;
+    --accent-dim:#cfe2ff;
+    --warn:#ffc107;
+    --danger:#dc3545;
+    --success:#198754;
+    --mono: "SF Mono", "Roboto Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-tap-highlight-color:transparent;}
+  body{min-height:100vh;display:flex;flex-direction:column;}
+
+  .topScannerGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:800px;margin:12px auto 0;padding:0 16px;align-items:stretch;}
+  
+  #largeDisplayCard{background:#ffffff;border:2px solid var(--accent);border-radius:12px;padding:8px 12px;
+    display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 4px 12px rgba(13,110,253,.08);min-height:96px;}
+  #largeDisplayCard .cardHeader{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;}
+  #largeDisplayCard .stats{font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700;}
+  #largeCodeDisplay{font-size:1.35rem;font-weight:800;font-family:var(--mono);color:var(--accent);line-height:1.15;letter-spacing:-.02em;margin:auto 0;text-align:center;word-break:break-all;}
+  #codeDetails{font-size:10.5px;font-weight:600;color:var(--sub);text-align:center;}
+
+  #camWrap{position:relative;background:#000;width:100%;height:96px;overflow:hidden;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);border:1px solid var(--line);}
+  video{width:100%;height:100%;object-fit:cover;display:block;}
+  #scanBox{position:absolute;left:6%;right:6%;top:18%;bottom:18%;
+    border:2px solid rgba(13,110,253,.85);border-radius:8px;
+    box-shadow:0 0 0 999px rgba(0,0,0,.35);pointer-events:none;overflow:hidden;}
+  .scanLine{width:100%;height:2px;background:#0d6efd;box-shadow:0 0 8px #0d6efd;position:absolute;top:50%;animation:scannerBeam 1.4s ease-in-out infinite alternate;}
+  @keyframes scannerBeam{0%{transform:translateY(-14px);}100%{transform:translateY(14px);}}
+  #scanBox.flash{border-color:var(--success);animation:flash .35s ease;}
+  @keyframes flash{0%{box-shadow:0 0 0 999px rgba(25,135,84,.3);}100%{box-shadow:0 0 0 999px rgba(0,0,0,.35);}}
+
+  #camStatus{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:8px;color:var(--sub);font-size:12px;background:var(--panel);}
+  #camStatus button{margin-top:6px;border-radius:14px;padding:6px 14px;font-size:12px;font-weight:700;}
+
+  #toast{position:fixed;left:50%;top:-100px;transform:translateX(-50%);
+    background:var(--warn);color:#1a1400;font-weight:600;font-size:14px;
+    padding:12px 20px;border-radius:30px;z-index:50;transition:top .3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow:0 8px 24px rgba(0,0,0,.15);max-width:88vw;text-align:center;}
+  #toast.show{top:20px;}
+  #toast.ok{background:var(--success);color:#fff;}
+  #toast.err{background:var(--danger);color:#fff;}
+
+  main{flex:1;display:flex;flex-direction:column;padding:12px 16px 90px;gap:12px; max-width: 800px; margin: 0 auto; width:100%;}
+
+  .controls{display:flex;gap:10px;flex-wrap:wrap; background:var(--panel); padding:12px 16px; border-radius:14px; box-shadow:0 2px 8px rgba(0,0,0,.04); border:1px solid var(--line);}
+  
+  select, button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-size:14px;font-weight:600;padding:10px 14px;border-radius:10px;cursor:pointer; transition:all .15s ease;}
+  button:active{transform:scale(.96);}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  button.danger{background:transparent;color:var(--danger);border-color:var(--danger);}
+  button:disabled{opacity:.5;}
+
+  select { font-weight:500; background:#f1f3f5 url('data:image/svg+xml;utf8,<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 10L12 15L17 10" stroke="%23495057" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>') no-repeat right 10px center/18px; padding-right:36px; border-color:transparent;}
+  
+  label.small{font-size:13.5px;color:var(--text);display:flex;align-items:center;gap:8px; font-weight:500; cursor:pointer;}
+  input[type="checkbox"] { accent-color: var(--accent); width:18px; height:18px; cursor:pointer;}
+
+  #listLabel{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px; padding:0 4px;}
+  #listLabel > span { font-weight:600; color:#000; font-size:15px; }
+  #listLabel span.count{font-family:var(--mono);color:var(--sub);font-size:13px; font-weight:500;}
+  textarea{width:100%;flex:1;min-height:30vh;background:var(--panel);color:var(--text);
+    border:1px solid var(--line);border-radius:14px;padding:16px;font-family:var(--mono);
+    font-size:14px;line-height:1.6;resize:vertical; box-shadow:0 2px 8px rgba(0,0,0,.02); outline:none;}
+  textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  textarea::placeholder{color:#adb5bd;}
+
+  .bottomBar{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+    background:rgba(248, 249, 250, 0.92); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    display:grid;grid-template-columns:1fr 1fr;gap:12px; border-top:1px solid var(--line); z-index:10;}
+  .bottomBar button{padding:14px 10px;font-size:14.5px; border-radius:12px;}
+  #permHelp{margin-top:16px;text-align:left;background:#fff3cd;border:1px solid #ffe69c;
+    border-radius:12px;padding:14px 16px;font-size:13.5px;color:#664d03;line-height:1.5;}
+  #permHelp b{color:#000;}
+</style>
+</head>
+<body>
+
+<div class="topScannerGrid">
+  <!-- LEFT: Large Display Card -->
+  <div id="largeDisplayCard">
+    <div class="cardHeader">
+      <span>Last Scanned</span>
+      <span class="stats"><span id="uniqueCount">0</span> uniq · <span id="totalCount">0</span> tot</span>
+    </div>
+    <div id="largeCodeDisplay">READY</div>
+    <div id="codeDetails">Point camera at barcode</div>
+  </div>
+
+  <!-- RIGHT: Compact Rectangular Viewfinder (96px) -->
+  <div id="camWrap">
+    <video id="video" playsinline muted></video>
+    <div id="scanBox">
+      <div class="scanLine"></div>
+    </div>
+    <div id="camStatus">
+      <div id="camStatusText">Camera standby</div>
+      <button id="startBtn" class="primary">Start Camera</button>
+      <div id="permHelp" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<main>
+  <div class="controls" style="align-items: center; width: 100%; justify-content: space-between;">
+    <div style="display:flex; gap:10px; align-items:center; flex:1;">
+      <select id="carrierFilter">
+        <option value="general">All Supported Carriers</option>
+        <option value="ontrac">OnTrac / LaserShip</option>
+        <option value="speedx">SpeedX</option>
+        <option value="gopro">GoPro</option>
+        <option value="any">Allow Abnormal (Any)</option>
+      </select>
+      <button id="toggleBtn" style="display:none; padding:8px 12px; font-size: 13px;">Pause</button>
+    </div>
+    <label class="small" style="margin: 0;"><input type="checkbox" id="dupToggle"> Allow duplicates</label>
+  </div>
+
+  <div id="listLabel">
+    <span>Scanned codes <span style="color:var(--sub);font-weight:400;">— paste or edit, then export</span></span>
+    <span class="count"><span id="listCount">0</span> lines</span>
+  </div>
+  <textarea id="output" placeholder="Scanned barcodes will appear here, one per line. You can also paste a list of codes here directly, then tap Export as PDF to generate barcode images." spellcheck="false"></textarea>
+</main>
+
+<div class="bottomBar" style="grid-template-columns: 1fr 1fr;">
+  <button id="copyBtn" class="primary">Copy All</button>
+  <button id="sendBulkBtn" class="primary" style="background:#198754;border-color:#198754;">Send to Bulk Task</button>
+  <button id="pdfBtn">Export as PDF</button>
+  <button id="clearBtn" class="danger">Clear</button>
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('video');
+  const scanBox = document.getElementById('scanBox');
+  const camStatus = document.getElementById('camStatus');
+  const camStatusText = document.getElementById('camStatusText');
+  const permHelp = document.getElementById('permHelp');
+  const startBtn = document.getElementById('startBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const carrierFilter = document.getElementById('carrierFilter');
+  const output = document.getElementById('output');
+  const toast = document.getElementById('toast');
+  const uniqueCountEl = document.getElementById('uniqueCount');
+  const totalCountEl = document.getElementById('totalCount');
+  const listCountEl = document.getElementById('listCount');
+  const dupToggle = document.getElementById('dupToggle');
+  const copyBtn = document.getElementById('copyBtn');
+  const sendBulkBtn = document.getElementById('sendBulkBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  let stream = null;
+  let detector = null;
+  let zxingReader = null;
+  let scanning = false;
+  let paused = false;
+  let seen = new Set();       // unique codes seen
+  let lines = [];             // ordered list as written to textarea
+  let totalScans = 0;
+  let lastCode = null;
+  let lastCodeTime = 0;
+  const REPEAT_IGNORE_MS = 1800; // ignore identical re-reads within this window
+
+  const FORMATS = ['code_128','code_39','code_93','codabar','ean_13','ean_8','upc_a','upc_e','itf','qr_code','data_matrix','pdf417','aztec'];
+
+  function showToast(msg, kind){
+    toast.textContent = msg;
+    toast.className = kind || '';
+    requestAnimationFrame(()=> toast.classList.add('show'));
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=> toast.classList.remove('show'), 1600);
+  }
+
+  function updateCounts(){
+    uniqueCountEl.textContent = seen.size;
+    totalCountEl.textContent = totalScans;
+    listCountEl.textContent = lines.length;
+  }
+
+  function flashBox(){
+    scanBox.classList.remove('flash');
+    void scanBox.offsetWidth;
+    scanBox.classList.add('flash');
+  }
+
+  function handleCode(value){
+    // QR codes often contain multiple pipe-delimited fields. We only want the first field.
+    if (value.includes('|')) {
+      value = value.split('|')[0];
+    }
+    
+    // Complex 2D barcodes (like PDF417) often contain embedded tracking numbers in a long string (e.g., ANSI MH10.8.2)
+    if (value.length > 25 || value.includes('[)>')) {
+      // Look for known 15-character OnTrac/LaserShip tracking numbers, or SpeedX
+      const extractMatch = value.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12}|SPX[A-Za-z0-9]+)/i);
+      if (extractMatch) {
+        value = extractMatch[0];
+      }
+    }
+
+    // Apply carrier filtering rules
+    const filter = carrierFilter.value;
+    let isValid = false;
+    let valUpper = value.toUpperCase();
+
+    const isOnTrac = (valUpper.startsWith('1LS') || valUpper.startsWith('D100') || valUpper.startsWith('C12')) && value.length >= 10;
+    const isSpeedX = valUpper.startsWith('SPX') && value.length >= 9;
+    const isGoPro = (valUpper.startsWith('D') || valUpper.startsWith('GF')) && value.length >= 9;
+
+    if (filter === 'any') {
+      isValid = true;
+    } else if (filter === 'ontrac') {
+      isValid = isOnTrac;
+    } else if (filter === 'speedx') {
+      isValid = isSpeedX;
+    } else if (filter === 'gopro') {
+      isValid = isGoPro;
+    } else if (filter === 'general') {
+      // General catches anything >= 9 characters, filtering out random tiny barcodes
+      isValid = value.length >= 9;
+    }
+
+    if (!isValid) return; // ignore codes that don't match the current filter
+    
+    totalScans++;
+    const now = Date.now();
+    if (value === lastCode && (now - lastCodeTime) < REPEAT_IGNORE_MS){
+      updateCounts();
+      return; // same code still under the camera, don't spam
+    }
+    lastCode = value;
+    lastCodeTime = now;
+    flashBox();
+
+    const isDup = seen.has(value);
+    if (isDup && !dupToggle.checked){
+      showToast('Already scanned: ' + value, 'err');
+      updateCounts();
+      return;
+    }
+    if (isDup){
+      showToast('Duplicate added: ' + value, '');
+    }
+    seen.add(value);
+    lines.push(value);
+    output.value = lines.join('\n');
+    output.scrollTop = output.scrollHeight;
+    updateCounts();
+
+    const largeDisplay = document.getElementById('largeCodeDisplay');
+    const detailsDisplay = document.getElementById('codeDetails');
+    if (largeDisplay) largeDisplay.textContent = value;
+    if (detailsDisplay) detailsDisplay.textContent = (new Date()).toLocaleTimeString() + ' · ' + value.length + ' chars';
+  }
+
+  async function startCamera(){
+    camStatusText.textContent = 'Requesting camera…';
+    permHelp.style.display = 'none';
+    startBtn.style.display = 'none';
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      camStatusText.textContent = 'This browser does not support camera access here.';
+      startBtn.style.display = 'inline-block';
+      return false;
+    }
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost'){
+      camStatusText.textContent = 'Camera requires a secure (https) page. This page is not loaded over https.';
+      startBtn.style.display = 'inline-block';
+      return false;
+    }
+
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width:{ideal:1280}, height:{ideal:720} },
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+    }catch(err){
+      startBtn.style.display = 'inline-block';
+      startBtn.textContent = 'Try Again';
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+        camStatusText.textContent = 'Camera permission is blocked for this page.';
+        permHelp.style.display = 'block';
+        permHelp.innerHTML =
+          '<b>No prompt appeared because this site was already blocked.</b><br>' +
+          'On Chrome (Android): tap the <b>Tune/lock icon</b> to the left of the address bar → <b>Permissions</b> → <b>Camera</b> → set to <b>Allow</b>, then reload this page.<br><br>' +
+          'Or: Chrome menu (⋮) → <b>Settings</b> → <b>Site settings</b> → <b>Camera</b> → find this site → <b>Allow</b>.<br><br>' +
+          'If this page is embedded inside another app/frame, open it directly in your browser (not inside another app) and try again.';
+      } else if (err.name === 'NotFoundError'){
+        camStatusText.textContent = 'No camera was found on this device.';
+      } else if (err.name === 'NotReadableError'){
+        camStatusText.textContent = 'The camera is already in use by another app. Close other camera apps and try again.';
+      } else {
+        camStatusText.textContent = 'Camera access failed: ' + (err.message || err.name);
+      }
+      return false;
+    }
+
+    if (!('BarcodeDetector' in window)){
+      if (typeof ZXing !== 'undefined') {
+        try {
+          zxingReader = new ZXing.BrowserMultiFormatReader();
+        } catch(e) {
+          console.warn('ZXing init error:', e);
+        }
+      }
+      if (!zxingReader) {
+        camStatusText.textContent = 'This browser has no barcode detector available.';
+        startBtn.style.display = 'none';
+        return false;
+      }
+    } else {
+      try{
+        detector = new BarcodeDetector({ formats: FORMATS });
+      }catch(e){
+        detector = new BarcodeDetector();
+      }
+    }
+
+    camStatus.style.display = 'none';
+    toggleBtn.style.display = 'inline-block';
+    scanning = true;
+    paused = false;
+
+    if (zxingReader) {
+      zxingReader.decodeFromVideoElement(video, (result, err) => {
+        if (!scanning || paused) return;
+        if (result && result.getText()) {
+          handleCode(result.getText());
+        }
+      });
+    } else {
+      loop();
+    }
+    return true;
+  }
+
+  async function loop(){
+    if (!scanning) return;
+    if (!paused && detector && video.readyState >= 2){
+      try{
+        const codes = await detector.detect(video);
+        if (codes && codes.length){
+          for (const c of codes){
+            if (c.rawValue) handleCode(c.rawValue);
+          }
+        }
+      }catch(e){ /* transient detection errors are fine, keep looping */ }
+    }
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('click', startCamera);
+
+  toggleBtn.addEventListener('click', ()=>{
+    paused = !paused;
+    toggleBtn.textContent = paused ? 'Resume' : 'Pause';
+  });
+
+  copyBtn.addEventListener('click', async ()=>{
+    if (!lines.length){ showToast('Nothing to copy yet', 'err'); return; }
+    try{
+      await navigator.clipboard.writeText(lines.join('\n'));
+      showToast('Copied ' + lines.length + ' line(s)', 'ok');
+    }catch(e){
+      output.focus();
+      output.select();
+      showToast('Copy failed — text is selected, use your keyboard copy', 'err');
+    }
+  });
+
+  sendBulkBtn.addEventListener('click', ()=>{
+    if (!lines.length){ showToast('No barcodes to send to Bulk Task', 'err'); return; }
+    
+    // Call parent window function if it exists
+    if (window.parent && typeof window.parent.sendScannerToBulkTask === 'function') {
+      window.parent.sendScannerToBulkTask(lines);
+      showToast('Sent ' + lines.length + ' barcodes to Bulk Task', 'ok');
+    } else {
+      showToast('Cannot communicate with main app', 'err');
+    }
+  });
+
+  const pdfBtn = document.getElementById('pdfBtn');
+  pdfBtn.addEventListener('click', ()=>{
+    // Reflect any manual edits in the textarea before exporting
+    const codes = output.value.split('\n').map(s=>s.trim()).filter(l => l.length);
+    if (!codes.length){ showToast('Nothing to export yet', 'err'); return; }
+    if (typeof JsBarcode === 'undefined' || typeof window.jspdf === 'undefined'){
+      showToast('PDF libraries failed to load — check your connection', 'err');
+      return;
+    }
+
+    pdfBtn.disabled = true;
+    pdfBtn.textContent = 'Building…';
+
+    setTimeout(()=>{
+      try{
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit:'pt', format:'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        const usableW = pageW - margin*2;
+        const blockH = 90;
+        let y = margin;
+        let rendered = 0, failed = 0;
+
+        codes.forEach((code)=>{
+          if (y + blockH > pageH - margin){ doc.addPage(); y = margin; }
+          const canvas = document.createElement('canvas');
+          try{
+            JsBarcode(canvas, code, {
+              format: 'CODE128', displayValue: true, height: 55,
+              margin: 8, fontSize: 14, textMargin: 4
+            });
+            const targetH = 70;
+            const targetW = canvas.width * (targetH / canvas.height);
+            const drawW = Math.min(targetW, usableW);
+            const drawH = canvas.height * (drawW / canvas.width);
+            doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, y, drawW, drawH);
+            y += drawH + 22;
+            rendered++;
+          }catch(e){
+            doc.setFontSize(10);
+            doc.setTextColor(200,50,50);
+            doc.text('Could not render as CODE128: ' + code, margin, y + 14);
+            doc.setTextColor(0,0,0);
+            y += 26;
+            failed++;
+          }
+        });
+
+        const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+        doc.save('barcodes-' + stamp + '.pdf');
+        showToast(failed ? (rendered + ' rendered, ' + failed + ' failed') : ('PDF saved: ' + rendered + ' barcode(s)'), failed ? 'err' : 'ok');
+      }catch(e){
+        showToast('PDF generation failed: ' + e.message, 'err');
+      }finally{
+        pdfBtn.disabled = false;
+        pdfBtn.textContent = 'Export as PDF';
+      }
+    }, 30);
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    if (!lines.length) return;
+    if (!confirm('Clear all ' + lines.length + ' scanned code(s)?')) return;
+    seen.clear();
+    lines = [];
+    totalScans = 0;
+    lastCode = null;
+    output.value = '';
+    updateCounts();
+    showToast('Cleared', '');
+  });
+
+  output.addEventListener('input', ()=>{
+    // allow manual edits; keep dedupe set in sync with manual edits
+    lines = output.value.split('\n').filter(l => l.length);
+    seen = new Set(lines);
+    updateCounts();
+  });
+
+  updateCounts();
+})();
+</script>
+</body>
+</html>
