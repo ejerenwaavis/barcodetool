@@ -665,9 +665,24 @@ let preloadSession = {
 
 let preloadSoundEnabled = true;
 let preloadVibrateEnabled = true;
+let preloadVoiceEnabled = false;
 let preloadStatusFilter = 'all';
 let preloadScanMode = 'verify'; // 'verify' | 'assign'
 let preloadZipFilter = 'all';
+let preloadDriverFilter = 'all';
+
+const DRIVER_COLORS = [
+  '#FF5A1F', // Orange (Default)
+  '#2563EB', // Blue
+  '#059669', // Emerald
+  '#7C3AED', // Purple
+  '#D97706', // Amber
+  '#DC2626', // Red
+  '#0D9488', // Teal
+  '#4F46E5', // Indigo
+  '#DB2777', // Pink
+  '#475569'  // Slate
+];
 
 let preloadStream = null;
 let preloadDetector = null;
@@ -736,6 +751,30 @@ function triggerPreloadHaptic() {
   }
 }
 
+function togglePreloadVoice() {
+  preloadVoiceEnabled = !preloadVoiceEnabled;
+  $('#preloadVoiceIcon').css('color', preloadVoiceEnabled ? 'var(--accent)' : 'var(--muted)');
+  if (preloadVoiceEnabled) {
+    speakText("Voice announcements on");
+    showToast("Voice announcements enabled", "ok");
+  } else {
+    showToast("Voice announcements disabled", "");
+  }
+}
+
+function speakText(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.05;
+    utter.pitch = 1.0;
+    window.speechSynthesis.speak(utter);
+  } catch (e) {
+    console.warn("Speech synthesis error", e);
+  }
+}
+
 function togglePreloadSound() {
   preloadSoundEnabled = !preloadSoundEnabled;
   const icon = document.getElementById('preloadSoundIcon');
@@ -769,6 +808,7 @@ function savePreloadSession() {
     if (preloadSession && preloadSession.active && preloadSession.packages.length) {
       preloadSession.scanMode = preloadScanMode;
       preloadSession.zipFilter = preloadZipFilter;
+      preloadSession.driverFilter = preloadDriverFilter;
       localStorage.setItem(PRELOAD_STORAGE_KEY, JSON.stringify(preloadSession));
     } else {
       localStorage.removeItem(PRELOAD_STORAGE_KEY);
@@ -798,6 +838,27 @@ function initPreloadScan() {
         preloadSession = parsed;
         if (parsed.scanMode) preloadScanMode = parsed.scanMode;
         if (parsed.zipFilter) preloadZipFilter = parsed.zipFilter;
+        if (parsed.driverFilter) preloadDriverFilter = parsed.driverFilter;
+        if (!parsed.routes || !parsed.routes.length) {
+          parsed.routes = [{
+            id: 'route_1',
+            driverName: 'Driver 1',
+            routeLabel: 'Route 1',
+            fullLabel: 'Driver 1 — Route 1',
+            shortCode: 'D-R1',
+            color: DRIVER_COLORS[0],
+            filename: parsed.filename || 'manifest.csv',
+            courier: parsed.courier || 'General'
+          }];
+          parsed.packages.forEach(p => {
+            if (!p.routeId) p.routeId = 'route_1';
+            if (!p.driverName) p.driverName = 'Driver 1';
+            if (!p.routeLabel) p.routeLabel = 'Route 1';
+            if (!p.fullLabel) p.fullLabel = 'Driver 1 — Route 1';
+            if (!p.routeShortCode) p.routeShortCode = 'D-R1';
+            if (!p.routeColor) p.routeColor = DRIVER_COLORS[0];
+          });
+        }
         const scannedCount = preloadSession.packages.filter(p => p.status === 'prescanned').length;
         $('#preloadResumeDetails').text(
           `${scannedCount} of ${preloadSession.packages.length} scanned (${preloadSession.filename || 'Manifest'})`
@@ -973,7 +1034,6 @@ async function handlePreloadFileInput(file) {
 
 function extractRowsFromWorkbook(wb) {
   if (!wb || !wb.SheetNames || !wb.SheetNames.length) return [];
-  // Prioritize sheet named 'result' (SpeedX default), 'manifest', 'data', 'parcels', or first sheet
   let sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'result');
   if (!sheetName) sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'manifest');
   if (!sheetName) sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'data');
@@ -1019,18 +1079,57 @@ function isExcludedSeqHeader(cleanKey) {
   return EXCLUDED.some(ex => cleanKey === ex || cleanKey.startsWith(ex + '_') || cleanKey.endsWith('_' + ex));
 }
 
-function processRawManifestRows(rows, filename, fileFormat) {
+// Multi-driver route generator with automatic route separator for same driver
+function allocateDriverRoute(driverName, routeLabel, filename, courierName) {
+  if (!preloadSession.routes) preloadSession.routes = [];
+
+  const rawDriver = (driverName || '').trim() || ('Driver ' + (preloadSession.routes.length + 1));
+  const cleanDriver = rawDriver.charAt(0).toUpperCase() + rawDriver.slice(1);
+  const initial = cleanDriver.charAt(0).toUpperCase();
+
+  // Find existing routes for this same driver (case-insensitive)
+  const existingForDriver = preloadSession.routes.filter(r => r.driverName.toLowerCase() === cleanDriver.toLowerCase());
+  const routeNum = existingForDriver.length + 1;
+
+  let assignedRouteLabel = routeLabel && routeLabel.trim() ? routeLabel.trim() : ('Route ' + routeNum);
+  let fullLabel = `${cleanDriver} — ${assignedRouteLabel}`;
+  let shortCode = `${initial}-R${routeNum}`;
+
+  // If this is the second route for the driver, ensure the first route is labeled "Route 1"
+  if (existingForDriver.length === 1 && existingForDriver[0].routeLabel === 'Route 1') {
+    existingForDriver[0].fullLabel = `${cleanDriver} — Route 1`;
+    existingForDriver[0].shortCode = `${initial}-R1`;
+  }
+
+  const colorIndex = preloadSession.routes.length % DRIVER_COLORS.length;
+  const color = DRIVER_COLORS[colorIndex];
+
+  const routeObj = {
+    id: 'route_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+    driverName: cleanDriver,
+    routeLabel: assignedRouteLabel,
+    fullLabel: fullLabel,
+    shortCode: shortCode,
+    color: color,
+    filename: filename || 'manifest.csv',
+    courier: courierName || 'General',
+    created: Date.now()
+  };
+
+  preloadSession.routes.push(routeObj);
+  return routeObj;
+}
+
+function processRawManifestRows(rows, filename, fileFormat, customDriverName, customRouteLabel, appendMode = false) {
   if (!rows || !rows.length) {
     showToast('No valid rows found in manifest', 'err');
     return;
   }
 
-  // Find non-empty row to get keys
   let sampleRow = rows.find(r => r && Object.keys(r).length > 0) || rows[0];
   const keys = Object.keys(sampleRow);
 
   function findKey(aliases, excludeSeq = false) {
-    // 1. Exact match
     for (const a of aliases) {
       const found = keys.find(k => {
         const clean = normalizeHeaderKey(k);
@@ -1039,7 +1138,6 @@ function processRawManifestRows(rows, filename, fileFormat) {
       });
       if (found) return found;
     }
-    // 2. Contains match
     for (const a of aliases) {
       const found = keys.find(k => {
         const clean = normalizeHeaderKey(k);
@@ -1054,7 +1152,6 @@ function processRawManifestRows(rows, filename, fileFormat) {
     return null;
   }
 
-  // Column matching
   const seqKey = findKey([
     'seqno', 'sequenceno', 'seq', 'sequence', 'sequencenumber',
     'stopnumber', 'stopno', 'stop', 'callsequence', 'routesequence',
@@ -1068,7 +1165,6 @@ function processRawManifestRows(rows, filename, fileFormat) {
     'waybill', 'parcelno', 'parcelid'
   ]);
 
-  // Pattern Fallback for Barcode if header matching failed or ambiguous
   if (!barcodeKey) {
     const testSamples = rows.slice(0, 15);
     const patternRegex = /^(?:SPX[A-Z0-9]+|1LS[A-Z0-9]+|L[A-Z]{2}d+|TBAd+|C12[A-Z0-9]+|D100[A-Z0-9]+|[A-Z0-9]{10,32})$/i;
@@ -1087,9 +1183,7 @@ function processRawManifestRows(rows, filename, fileFormat) {
       }
     });
 
-    if (bestKey) {
-      barcodeKey = bestKey;
-    }
+    if (bestKey) barcodeKey = bestKey;
   }
 
   const addressKey = findKey([
@@ -1103,10 +1197,7 @@ function processRawManifestRows(rows, filename, fileFormat) {
     'apartment', 'bldg', 'building', 'unitnumber'
   ]);
 
-  const zipKey = findKey([
-    'zipcode', 'zip', 'postalcode', 'postal', 'postcode', 'pincode'
-  ]);
-
+  const zipKey = findKey(['zipcode', 'zip', 'postalcode', 'postal', 'postcode', 'pincode']);
   const cityKey = findKey(['city', 'town', 'municipality']);
   const stateKey = findKey(['state', 'province', 'st']);
 
@@ -1120,16 +1211,55 @@ function processRawManifestRows(rows, filename, fileFormat) {
     'telephone', 'tel', 'cell', 'mobile', 'phoneno'
   ]);
 
-  const routeKey = findKey([
-    'route', 'routecode', 'batch', 'batchid', 'routeno', 'routename', 'driverroute'
-  ]);
+  const routeKey = findKey(['route', 'routecode', 'batch', 'batchid', 'routeno', 'routename', 'driverroute']);
+  const weightKey = findKey(['weight', 'pkgweight', 'packageweight', 'weightlbs', 'weightkg']);
+  const driverColKey = findKey(['drivername', 'driver', 'courier', 'assignedto', 'driverid']);
 
-  const weightKey = findKey([
-    'weight', 'pkgweight', 'packageweight', 'weightlbs', 'weightkg'
-  ]);
+  // Detect Courier Name
+  let courierName = 'Generic';
+  const sampleBarcodes = rows.slice(0, 30).map(r => String((barcodeKey && r[barcodeKey]) || Object.values(r)[0] || ''));
+  const sampleFilename = (filename || '').toLowerCase();
 
-  // Build normalized packages list
-  const packages = [];
+  if (sampleBarcodes.some(b => b.toUpperCase().startsWith('SPX')) || sampleFilename.includes('speedx') || sampleFilename.includes('route_parcel')) {
+    courierName = 'SpeedX';
+  } else if (sampleBarcodes.some(b => b.toUpperCase().startsWith('1LS') || b.toUpperCase().startsWith('D100') || b.toUpperCase().startsWith('C12')) || sampleFilename.includes('lasership') || keys.some(k => k.toLowerCase().includes('lasership'))) {
+    courierName = 'LaserShip';
+  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'packageid')) {
+    courierName = 'Circuit / Spoke';
+  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'streetaddress')) {
+    courierName = 'RoadWarrior';
+  }
+
+  // Determine initial driver name
+  let targetDriverName = customDriverName;
+  if (!targetDriverName && driverColKey && sampleRow[driverColKey]) {
+    targetDriverName = String(sampleRow[driverColKey]).trim();
+  }
+  if (!targetDriverName) {
+    if (!appendMode && (!preloadSession.routes || !preloadSession.routes.length)) {
+      targetDriverName = 'Driver 1';
+    } else {
+      targetDriverName = 'Driver ' + ((preloadSession.routes ? preloadSession.routes.length : 0) + 1);
+    }
+  }
+
+  if (!appendMode) {
+    preloadSession = {
+      filename: filename,
+      timestamp: Date.now(),
+      packages: [],
+      routes: [],
+      courier: courierName,
+      active: true
+    };
+  }
+
+  const routeObj = allocateDriverRoute(targetDriverName, customRouteLabel, filename, courierName);
+
+  // Parse and build normalized packages
+  const newPackages = [];
+  const startIdOffset = preloadSession.packages ? preloadSession.packages.length : 0;
+
   rows.forEach((row, idx) => {
     let rawBarcode = (barcodeKey && row[barcodeKey] !== undefined ? String(row[barcodeKey]) : '').trim();
     let rawSeq = (seqKey && row[seqKey] !== undefined ? String(row[seqKey]) : '').trim();
@@ -1143,7 +1273,6 @@ function processRawManifestRows(rows, filename, fileFormat) {
     let route = (routeKey && row[routeKey] !== undefined ? String(row[routeKey]) : '').trim();
     let weight = (weightKey && row[weightKey] !== undefined ? String(row[weightKey]) : '').trim();
 
-    // Fallback if no barcodeKey matched: inspect row values for tracking pattern
     if (!rawBarcode && Object.values(row).length) {
       const vals = Object.values(row).map(v => String(v || '').trim()).filter(Boolean);
       const barcodeCandidate = vals.find(v => /^(?:SPX|1LS|L[A-Z]{2}|TBA|[A-Z0-9]{10,32})/i.test(v));
@@ -1154,7 +1283,6 @@ function processRawManifestRows(rows, filename, fileFormat) {
       let cleanBarcode = rawBarcode.replace(/["']/g, '').trim().toUpperCase();
       if (cleanBarcode.includes('|')) cleanBarcode = cleanBarcode.split('|')[0].trim();
 
-      // Automatically append unit/address line 2 to display address if not already present
       let displayAddress = primaryAddr;
       if (unit) {
         const uClean = unit.toUpperCase();
@@ -1170,8 +1298,8 @@ function processRawManifestRows(rows, filename, fileFormat) {
         }
       }
 
-      packages.push({
-        id: 'pkg_' + (idx + 1),
+      newPackages.push({
+        id: 'pkg_' + (startIdOffset + idx + 1),
         barcode: cleanBarcode,
         seq: rawSeq || '?',
         address: displayAddress,
@@ -1184,28 +1312,33 @@ function processRawManifestRows(rows, filename, fileFormat) {
         phone: phone,
         route: route,
         weight: weight,
+        routeId: routeObj.id,
+        driverName: routeObj.driverName,
+        routeLabel: routeObj.routeLabel,
+        fullLabel: routeObj.fullLabel,
+        routeShortCode: routeObj.shortCode,
+        routeColor: routeObj.color,
         status: 'pending',
         scannedAt: null,
-        origIndex: idx
+        origIndex: startIdOffset + idx
       });
     }
   });
 
-  if (!packages.length) {
+  if (!newPackages.length) {
     showToast('No valid barcodes found in manifest data', 'err');
     return;
   }
 
-  // Check if unsequenced batch (all sequence numbers are 0, empty, or '?')
-  const nonZeroSeqs = packages.filter(p => {
+  // Infer missing sequences if not unsequenced batch
+  const nonZeroSeqs = newPackages.filter(p => {
     const s = String(p.seq).trim();
     return s !== '' && s !== '?' && s !== '0' && s !== '0.0' && s !== '00';
   });
   const isUnsequenced = nonZeroSeqs.length === 0;
 
-  // Infer missing sequences based on street name ONLY if not unsequenced batch
   if (!isUnsequenced) {
-    for (const pkg of packages) {
+    for (const pkg of newPackages) {
       if (pkg.seq === '?') {
         const targetUpper = pkg.address.toUpperCase();
         const streetMatch = targetUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
@@ -1217,7 +1350,7 @@ function processRawManifestRows(rows, filename, fileFormat) {
         }
 
         if (streetName.length >= 4) {
-          for (const other of packages) {
+          for (const other of newPackages) {
             const otherSeq = String(other.seq);
             if (otherSeq !== '?' && !otherSeq.includes('.') && other.address.toUpperCase().includes(streetName)) {
               pkg.seq = otherSeq + '.5';
@@ -1229,62 +1362,216 @@ function processRawManifestRows(rows, filename, fileFormat) {
     }
   }
 
-  // Detect Courier Name & Schema Format
-  let courierName = 'Generic';
-  const sampleBarcodes = packages.slice(0, 30).map(p => p.barcode);
-  const sampleFilename = (filename || '').toLowerCase();
+  preloadSession.packages = (preloadSession.packages || []).concat(newPackages);
+  preloadSession.isUnsequenced = isUnsequenced;
+  if (!preloadSession.nextAssignSeq) preloadSession.nextAssignSeq = 1;
 
-  if (sampleBarcodes.some(b => b.startsWith('SPX')) || sampleFilename.includes('speedx') || sampleFilename.includes('route_parcel')) {
-    courierName = 'SpeedX';
-  } else if (sampleBarcodes.some(b => b.startsWith('1LS') || b.startsWith('D100') || b.startsWith('C12')) || sampleFilename.includes('lasership') || keys.some(k => k.toLowerCase().includes('lasership'))) {
-    courierName = 'LaserShip';
-  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'packageid')) {
-    courierName = 'Circuit / Spoke';
-  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'streetaddress')) {
-    courierName = 'RoadWarrior';
-  }
-
-  const schemaMapping = {
-    barcode: barcodeKey || 'Auto',
-    seq: seqKey || 'None',
-    address: addressKey || 'Auto',
-    unit: unitKey || null,
-    zip: zipKey || null,
-    recipient: recipientKey || null,
-    phone: phoneKey || null,
-    route: routeKey || null
-  };
-
-  preloadSession = {
-    filename: filename,
-    timestamp: Date.now(),
-    packages: packages,
-    courier: courierName,
-    courierBadge: `${courierName} ${fileFormat || 'Manifest'} (${packages.length} pkgs)`,
-    schemaMapping: schemaMapping,
-    isUnsequenced: isUnsequenced,
-    nextAssignSeq: 1,
-    active: true
-  };
-
-  // If unsequenced, default scan mode to 'assign'
   if (isUnsequenced) {
     preloadScanMode = 'assign';
-  } else {
-    preloadScanMode = 'verify';
   }
-  preloadZipFilter = 'all';
 
   savePreloadSession();
   renderPreloadSessionUI();
-  showToast(`Loaded ${packages.length} packages from ${filename}`, 'ok');
+
+  if (appendMode) {
+    showToast(`Added ${newPackages.length} packages to ${routeObj.fullLabel}!`, 'ok');
+  } else {
+    showToast(`Loaded ${newPackages.length} packages for ${routeObj.fullLabel}`, 'ok');
+  }
 
   setTimeout(() => {
     $('#preloadScanInput').focus();
   }, 200);
 }
 
-// Backward-compatibility wrapper
+// Add Driver Modal Handlers
+function openAddDriverModal() {
+  $('#addDriverNameInput').val('');
+  $('#addDriverRouteInput').val('');
+  $('#addDriverFileInput').val('');
+  $('#addDriverPasteText').val('');
+  const modalEl = document.getElementById('addDriverModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+async function submitAddDriverManifest() {
+  const driverName = $('#addDriverNameInput').val().trim();
+  if (!driverName) {
+    showToast('Please enter a Driver Name', 'warn');
+    return;
+  }
+  const routeLabel = $('#addDriverRouteInput').val().trim();
+  const fileInput = document.getElementById('addDriverFileInput');
+  const pasteText = $('#addDriverPasteText').val().trim();
+
+  const modalEl = document.getElementById('addDriverModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+  }
+
+  if (fileInput && fileInput.files && fileInput.files.length) {
+    const file = fileInput.files[0];
+    const name = file.name || 'manifest.csv';
+    const lowerName = name.toLowerCase();
+    showToast('Reading ' + name + ' for ' + driverName + '...', '');
+
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const rows = extractRowsFromWorkbook(wb);
+          processRawManifestRows(rows, name, 'XLSX', driverName, routeLabel, true);
+        } catch (err) {
+          showToast('Failed to parse Excel: ' + err.message, 'err');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const parsed = Papa.parse(evt.target.result.trim(), { header: true, skipEmptyLines: 'greedy' });
+        processRawManifestRows(parsed.data, name, 'CSV', driverName, routeLabel, true);
+      };
+      reader.readAsText(file);
+    }
+  } else if (pasteText) {
+    const parsed = Papa.parse(pasteText, { header: true, skipEmptyLines: 'greedy' });
+    processRawManifestRows(parsed.data, 'Pasted-' + driverName, 'Pasted', driverName, routeLabel, true);
+  } else {
+    showToast('Please select a manifest file or paste text', 'warn');
+  }
+}
+
+// Split Manifest by Drivers Modal Handlers
+function openSplitManifestModal() {
+  if (!preloadSession || !preloadSession.packages || !preloadSession.packages.length) {
+    showToast('Upload a manifest before splitting across drivers', 'warn');
+    return;
+  }
+
+  // Populate Zip Code split rows
+  const zipContainer = $('#splitZipContainer');
+  zipContainer.empty();
+
+  const zipCounts = {};
+  preloadSession.packages.forEach(p => {
+    const z = (p.zip || 'Unknown').trim();
+    zipCounts[z] = (zipCounts[z] || 0) + 1;
+  });
+
+  const sortedZips = Object.keys(zipCounts).sort();
+  sortedZips.forEach((z, idx) => {
+    zipContainer.append(`
+      <div class="d-flex align-items-center gap-2 p-2 border rounded bg-light">
+        <span class="badge bg-dark fw-bold font-monospace" style="min-width:70px; font-size:12px;">${escapeHtml(z)}</span>
+        <span class="text-muted small" style="min-width:65px;">${zipCounts[z]} pkgs</span>
+        <input type="text" class="form-control form-control-sm split-zip-driver-input" data-zip="${escapeHtml(z)}" placeholder="Assign Driver Name (e.g. Maria, John)" value="Driver ${idx + 1}">
+      </div>
+    `);
+  });
+
+  renderSplitCountInputs();
+
+  const modalEl = document.getElementById('splitManifestModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+function renderSplitCountInputs() {
+  const count = parseInt($('#splitDriverCountSelect').val()) || 3;
+  const container = $('#splitCountDriversContainer');
+  container.empty();
+
+  const total = preloadSession.packages ? preloadSession.packages.length : 0;
+  const perDriver = Math.floor(total / count);
+
+  for (let i = 1; i <= count; i++) {
+    const approx = i === count ? total - (perDriver * (count - 1)) : perDriver;
+    container.append(`
+      <div class="d-flex align-items-center gap-2 p-2 border rounded bg-light">
+        <span class="badge bg-primary" style="min-width:70px;">Driver ${i}</span>
+        <span class="text-muted small" style="min-width:75px;">~${approx} pkgs</span>
+        <input type="text" class="form-control form-control-sm split-count-driver-input" data-index="${i}" placeholder="Driver Name" value="Driver ${i}">
+      </div>
+    `);
+  }
+}
+
+function submitSplitManifest() {
+  if (!preloadSession || !preloadSession.packages) return;
+
+  const isZipTabActive = $('#splitByZipTab').hasClass('active');
+  const modalEl = document.getElementById('splitManifestModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+  }
+
+  // Clear existing routes
+  preloadSession.routes = [];
+
+  if (isZipTabActive) {
+    // Split by Zip Code
+    const zipMap = {};
+    $('.split-zip-driver-input').each(function() {
+      const zip = $(this).data('zip');
+      const driver = $(this).val().trim() || 'Driver';
+      zipMap[zip] = driver;
+    });
+
+    const routeMap = {};
+    preloadSession.packages.forEach(p => {
+      const z = (p.zip || 'Unknown').trim();
+      const driver = zipMap[z] || 'Driver 1';
+      if (!routeMap[driver]) {
+        routeMap[driver] = allocateDriverRoute(driver, null, preloadSession.filename, preloadSession.courier);
+      }
+      const r = routeMap[driver];
+      p.routeId = r.id;
+      p.driverName = r.driverName;
+      p.routeLabel = r.routeLabel;
+      p.fullLabel = r.fullLabel;
+      p.routeShortCode = r.shortCode;
+      p.routeColor = r.color;
+    });
+  } else {
+    // Equal count split
+    const driverNames = [];
+    $('.split-count-driver-input').each(function() {
+      driverNames.push($(this).val().trim() || ('Driver ' + ($(this).data('index') || 1)));
+    });
+
+    const numDrivers = driverNames.length;
+    const total = preloadSession.packages.length;
+    const chunkSize = Math.ceil(total / numDrivers);
+
+    const routes = driverNames.map(name => allocateDriverRoute(name, null, preloadSession.filename, preloadSession.courier));
+
+    preloadSession.packages.forEach((p, idx) => {
+      const driverIdx = Math.min(Math.floor(idx / chunkSize), numDrivers - 1);
+      const r = routes[driverIdx];
+      p.routeId = r.id;
+      p.driverName = r.driverName;
+      p.routeLabel = r.routeLabel;
+      p.fullLabel = r.fullLabel;
+      p.routeShortCode = r.shortCode;
+      p.routeColor = r.color;
+    });
+  }
+
+  savePreloadSession();
+  renderPreloadSessionUI();
+  showToast(`Split ${preloadSession.packages.length} packages across ${preloadSession.routes.length} driver routes!`, 'ok');
+}
+
 function processPreloadCsvContent(csvText, filename) {
   if (typeof Papa === 'undefined') {
     showToast('CSV parser not available', 'err');
@@ -1319,11 +1606,12 @@ function confirmResetPreload(fromBanner) {
   }
 
   stopPreloadCamera();
-  preloadSession = { filename: '', timestamp: 0, packages: [], active: false };
+  preloadSession = { filename: '', timestamp: 0, packages: [], routes: [], active: false };
   localStorage.removeItem(PRELOAD_STORAGE_KEY);
 
   preloadScanMode = 'verify';
   preloadZipFilter = 'all';
+  preloadDriverFilter = 'all';
 
   $('#preloadResumeBanner').addClass('d-none').removeClass('d-flex');
   $('#preloadActiveSection').hide();
@@ -1332,6 +1620,8 @@ function confirmResetPreload(fromBanner) {
   $('#preloadPasteText').val('');
   $('#preloadTableBody').empty();
   $('#preloadLastSeq').text('#---');
+  $('#preloadLastDriverBadge').hide().empty();
+  $('#preloadLastDriverRouteTag').hide().empty();
   $('#preloadLastAddress').text('Scan a package barcode to begin numbering');
   $('#preloadLastBarcode').text('Ready for scanner');
   showToast('Preload session reset', '');
@@ -1342,13 +1632,28 @@ function renderPreloadSessionUI() {
 
   $('#preloadUploadSection').hide();
   $('#preloadActiveSection').show();
+
+  const total = preloadSession.packages ? preloadSession.packages.length : 0;
+  const scanned = preloadSession.packages ? preloadSession.packages.filter(p => p.status === 'prescanned').length : 0;
+  const pending = total - scanned;
+
+  // 1. Update Flush Slim Status Strip
+  const routeCount = preloadSession.routes ? preloadSession.routes.length : 1;
+  const poolBadgeText = routeCount > 1 ? `Team Pool (${routeCount} Drivers)` : (preloadSession.routes && preloadSession.routes[0] ? preloadSession.routes[0].fullLabel : 'Active Manifest');
+  $('#preloadPoolBadge').text(poolBadgeText);
+  $('#preloadSessionMiniInfo').text(`${total} Total • ${scanned} Scanned • ${pending} Pending`);
+
+  // 2. Update Collapsible Detailed Summary
   $('#preloadSessionFilename').text(preloadSession.filename || 'Manifest');
   if (preloadSession.timestamp) {
     $('#preloadSessionTime').text('Loaded ' + new Date(preloadSession.timestamp).toLocaleTimeString());
   }
 
-  // Update Courier Badge & Schema Mapping
-  $('#preloadCourierBadge').text(preloadSession.courierBadge || `${preloadSession.courier || 'Universal'} (${preloadSession.packages.length} pkgs)`);
+  // Render Team Drivers Summary Cards
+  renderDriversSummaryStrip();
+
+  // Update Courier Badge
+  $('#preloadCourierBadge').text(preloadSession.courierBadge || `${preloadSession.courier || 'Universal'} (${total} pkgs)`);
 
   if (preloadSession.isUnsequenced) {
     $('#preloadUnsequencedBadge').removeClass('d-none');
@@ -1358,21 +1663,63 @@ function renderPreloadSessionUI() {
     $('#preloadUnsequencedNotice').addClass('d-none');
   }
 
-  if (preloadSession.schemaMapping) {
-    const sm = preloadSession.schemaMapping;
-    let mapText = `Barcode: ${sm.barcode} · Seq: ${sm.seq} · Addr: ${sm.address}`;
-    if (sm.zip) mapText += ` · Zip: ${sm.zip}`;
-    $('#preloadSchemaMappingText').text(mapText);
-  }
-
-  // Populate Zip Code filter dropdown
+  // Populate Filter Dropdowns
+  populatePreloadDriverDropdown();
   populatePreloadZipDropdown();
 
-  // Update Scan Mode Buttons
+  // Populate Export Dropdown Menu
+  renderPreloadExportDropdown();
+
+  // Update Mode buttons
   setPreloadScanMode(preloadScanMode || 'verify', true);
 
   updatePreloadMetrics();
   renderPreloadTable();
+}
+
+function renderDriversSummaryStrip() {
+  const container = $('#preloadDriversSummaryStrip');
+  if (!container.length) return;
+  container.empty();
+
+  if (!preloadSession.routes || !preloadSession.routes.length) {
+    container.html('<span class="text-muted small">Single Route Manifest</span>');
+    return;
+  }
+
+  preloadSession.routes.forEach(r => {
+    const driverPkgs = preloadSession.packages.filter(p => p.routeId === r.id);
+    const dTotal = driverPkgs.length;
+    const dScanned = driverPkgs.filter(p => p.status === 'prescanned').length;
+    const pct = dTotal > 0 ? Math.round((dScanned / dTotal) * 100) : 0;
+
+    container.append(`
+      <div class="driver-mini-card">
+        <span class="driver-route-badge" style="background:${r.color};">${escapeHtml(r.shortCode)}</span>
+        <div>
+          <div class="fw-bold text-dark text-truncate" style="max-width:110px;">${escapeHtml(r.driverName)}</div>
+          <div class="text-muted" style="font-size:10px;">${dScanned}/${dTotal} (${pct}%)</div>
+        </div>
+      </div>
+    `);
+  });
+}
+
+function populatePreloadDriverDropdown() {
+  const select = $('#preloadDriverFilter');
+  if (!select.length) return;
+  select.empty();
+
+  const total = preloadSession.packages ? preloadSession.packages.length : 0;
+  select.append(`<option value="all">All Drivers (${total})</option>`);
+
+  if (!preloadSession.routes) return;
+  preloadSession.routes.forEach(r => {
+    const count = preloadSession.packages.filter(p => p.routeId === r.id).length;
+    select.append(`<option value="${r.id}">${escapeHtml(r.fullLabel)} (${count})</option>`);
+  });
+
+  select.val(preloadDriverFilter || 'all');
 }
 
 function populatePreloadZipDropdown() {
@@ -1381,7 +1728,7 @@ function populatePreloadZipDropdown() {
   select.empty();
 
   const totalPkgs = preloadSession.packages ? preloadSession.packages.length : 0;
-  select.append(`<option value="all">All Zip Codes (${totalPkgs})</option>`);
+  select.append(`<option value="all">All Zips (${totalPkgs})</option>`);
 
   if (!preloadSession.packages) return;
 
@@ -1401,6 +1748,18 @@ function populatePreloadZipDropdown() {
   select.val(preloadZipFilter || 'all');
 }
 
+function handlePreloadDriverFilterChange() {
+  preloadDriverFilter = $('#preloadDriverFilter').val() || 'all';
+  updatePreloadMetrics();
+  renderPreloadTable();
+}
+
+function handlePreloadZipFilterChange() {
+  preloadZipFilter = $('#preloadZipFilter').val() || 'all';
+  updatePreloadMetrics();
+  renderPreloadTable();
+}
+
 function setPreloadScanMode(mode, silent) {
   preloadScanMode = mode;
   $('#modeVerifyBtn').toggleClass('active', mode === 'verify');
@@ -1415,19 +1774,20 @@ function setPreloadScanMode(mode, silent) {
   }
 }
 
-function handlePreloadZipFilterChange() {
-  preloadZipFilter = $('#preloadZipFilter').val() || 'all';
-  updatePreloadMetrics();
-  renderPreloadTable();
-}
-
 function updatePreloadMetrics() {
   if (!preloadSession || !preloadSession.packages) return;
 
-  const allPkgs = preloadSession.packages;
-  const targetPkgs = preloadZipFilter === 'all'
-    ? allPkgs
-    : allPkgs.filter(p => (p.zip || '').trim() === preloadZipFilter);
+  let targetPkgs = preloadSession.packages;
+
+  // Apply Driver filter
+  if (preloadDriverFilter !== 'all') {
+    targetPkgs = targetPkgs.filter(p => p.routeId === preloadDriverFilter);
+  }
+
+  // Apply Zip filter
+  if (preloadZipFilter !== 'all') {
+    targetPkgs = targetPkgs.filter(p => (p.zip || '').trim() === preloadZipFilter);
+  }
 
   const total = targetPkgs.length;
   const scanned = targetPkgs.filter(p => p.status === 'prescanned').length;
@@ -1450,18 +1810,14 @@ function updatePreloadMetrics() {
   $('#preloadProgressFill').css('width', percent + '%');
   $('#preloadProgressFraction').text(`${scanned} / ${total}`);
 
+  // Update Mini Info Strip
+  const allTotal = preloadSession.packages.length;
+  const allScanned = preloadSession.packages.filter(p => p.status === 'prescanned').length;
+  const allPending = allTotal - allScanned;
+  $('#preloadSessionMiniInfo').text(`${allTotal} Total • ${allScanned} Scanned • ${allPending} Pending`);
+
   const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   $('#syncStateText').text('Synced ' + timeNow);
-
-  const lastScannedPkg = [...targetPkgs]
-    .filter(p => p.status === 'prescanned' && p.scannedAt)
-    .sort((a, b) => b.scannedAt - a.scannedAt)[0];
-
-  if (lastScannedPkg && $('#preloadLastSeq').text() === '#---') {
-    $('#preloadLastSeq').text('#' + lastScannedPkg.seq);
-    $('#preloadLastAddress').text(lastScannedPkg.address);
-    $('#preloadLastBarcode').text(lastScannedPkg.barcode + ' · ' + new Date(lastScannedPkg.scannedAt).toLocaleTimeString());
-  }
 
   renderPreloadLiveFeed();
 }
@@ -1491,14 +1847,18 @@ function renderPreloadLiveFeed() {
   let html = '';
   recentScans.forEach(pkg => {
     const timeStr = new Date(pkg.scannedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const badgeColor = pkg.routeColor || '#FF5A1F';
     html += `
       <div class="scan-row">
         <div class="scan-icon ok">
           <svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
         </div>
         <div class="scan-body">
-          <div class="scan-code mono">${escapeHtml(pkg.barcode)} · #${escapeHtml(String(pkg.seq))}</div>
-          <div class="scan-meta">${escapeHtml(pkg.address)}</div>
+          <div class="scan-code mono">
+            <span class="driver-route-badge" style="background:${badgeColor}; font-size:10px; padding:1px 5px;">${escapeHtml(pkg.routeShortCode || 'R1')}</span>
+            ${escapeHtml(pkg.barcode)} · #${escapeHtml(String(pkg.seq))}
+          </div>
+          <div class="scan-meta">${escapeHtml(pkg.driverName ? pkg.driverName + ' • ' : '')}${escapeHtml(pkg.address)}</div>
         </div>
         <div class="scan-time mono">${timeStr}</div>
       </div>
@@ -1533,6 +1893,11 @@ function renderPreloadTable() {
   tbody.empty();
 
   let filtered = preloadSession.packages.filter(pkg => {
+    // Driver filter
+    if (preloadDriverFilter !== 'all') {
+      if (pkg.routeId !== preloadDriverFilter) return false;
+    }
+
     // Zip filter
     if (preloadZipFilter !== 'all') {
       if ((pkg.zip || '').trim() !== preloadZipFilter) return false;
@@ -1547,18 +1912,17 @@ function renderPreloadTable() {
       const matchSeq = String(pkg.seq).toLowerCase().includes(searchTerm);
       const matchBarcode = pkg.barcode.toLowerCase().includes(searchTerm);
       const matchAddr = pkg.address.toLowerCase().includes(searchTerm);
+      const matchDriver = (pkg.driverName || '').toLowerCase().includes(searchTerm);
       const matchZip = (pkg.zip || '').toLowerCase().includes(searchTerm);
-      const matchRecip = (pkg.recipient || '').toLowerCase().includes(searchTerm);
-      if (!matchSeq && !matchBarcode && !matchAddr && !matchZip && !matchRecip) return false;
+      if (!matchSeq && !matchBarcode && !matchAddr && !matchDriver && !matchZip) return false;
     }
     return true;
   });
 
-  const zipLabel = preloadZipFilter !== 'all' ? ` in Zip ${preloadZipFilter}` : '';
-  $('#preloadShowingCount').text(`Showing ${filtered.length} of ${preloadSession.packages.length} packages${zipLabel}`);
+  $('#preloadShowingCount').text(`Showing ${filtered.length} of ${preloadSession.packages.length} packages`);
 
   if (!filtered.length) {
-    tbody.html('<tr><td colspan="5" class="text-center py-4 text-muted">No packages match the current filter</td></tr>');
+    tbody.html('<tr><td colspan="6" class="text-center py-4 text-muted">No packages match the current filter</td></tr>');
     return;
   }
 
@@ -1567,7 +1931,7 @@ function renderPreloadTable() {
     const isScanned = pkg.status === 'prescanned';
     const rowClass = isScanned ? 'preload-row-scanned' : '';
     const badge = isScanned
-      ? `<span class="badge-prescanned"><i class="bi bi-check-circle me-1"></i>Pre-scanned</span>`
+      ? `<span class="badge-prescanned"><i class="bi bi-check-circle me-1"></i>Scanned</span>`
       : `<span class="badge-pending">Pending</span>`;
     const actionBtn = isScanned
       ? `<button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.78rem;" onclick="togglePreloadManualPackageStatus('${pkg.id}')">Undo</button>`
@@ -1575,10 +1939,12 @@ function renderPreloadTable() {
 
     const seqDisplay = (pkg.seq === '?' || pkg.seq === '0') ? `<span class="text-muted">#--</span>` : `#${pkg.seq}`;
     const zipBadge = pkg.zip ? `<span class="preload-zip-badge">${escapeHtml(pkg.zip)}</span>` : '';
+    const driverBadge = `<span class="driver-route-badge" style="background:${pkg.routeColor || '#FF5A1F'}; font-size:10.5px;">${escapeHtml(pkg.routeShortCode || 'R1')}</span> <span class="small fw-semibold">${escapeHtml(pkg.driverName || 'Driver')}</span>`;
 
     rowsHtml.push(`
       <tr class="${rowClass}" id="preload-row-${pkg.id}">
         <td><strong class="font-monospace text-primary fs-6">${seqDisplay}</strong></td>
+        <td>${driverBadge}</td>
         <td><span class="font-monospace small fw-bold">${escapeHtml(pkg.barcode)}</span></td>
         <td class="small fw-semibold text-dark">${escapeHtml(pkg.address)} ${zipBadge}</td>
         <td class="text-center">${badge}</td>
@@ -1648,10 +2014,19 @@ function handlePreloadBarcodeScan(rawCode) {
 
   let pkg = preloadSession.packages.find(p => p.barcode === code);
 
-  // If in 'assign' mode and package not found: add it as an ad-hoc package!
+  // If in 'assign' mode and package not found: add it as an ad-hoc package
   if (!pkg && preloadScanMode === 'assign') {
     if (!preloadSession.nextAssignSeq) preloadSession.nextAssignSeq = 1;
     const assignedSeq = String(preloadSession.nextAssignSeq++);
+    const defaultRoute = (preloadSession.routes && preloadSession.routes[0]) || {
+      id: 'route_1',
+      driverName: 'Driver 1',
+      routeLabel: 'Route 1',
+      fullLabel: 'Driver 1 — Route 1',
+      shortCode: 'D-R1',
+      color: DRIVER_COLORS[0]
+    };
+
     pkg = {
       id: 'pkg_' + (preloadSession.packages.length + 1),
       barcode: code,
@@ -1660,6 +2035,12 @@ function handlePreloadBarcodeScan(rawCode) {
       primaryAddr: 'Ad-hoc scanned package',
       unit: '',
       zip: '',
+      routeId: defaultRoute.id,
+      driverName: defaultRoute.driverName,
+      routeLabel: defaultRoute.routeLabel,
+      fullLabel: defaultRoute.fullLabel,
+      routeShortCode: defaultRoute.shortCode,
+      routeColor: defaultRoute.color,
       status: 'pending',
       scannedAt: null,
       origIndex: preloadSession.packages.length
@@ -1671,8 +2052,8 @@ function handlePreloadBarcodeScan(rawCode) {
   if (pkg) {
     const isAlreadyScanned = pkg.status === 'prescanned';
 
-    // In 'assign' mode, assign next sequential number if not already scanned
-    if (preloadScanMode === 'assign' && !isAlreadyScanned) {
+    // In 'assign' mode, assign next sequential number if not already assigned
+    if (preloadScanMode === 'assign' && (!pkg.seq || pkg.seq === '0' || pkg.seq === '?')) {
       if (!preloadSession.nextAssignSeq) preloadSession.nextAssignSeq = 1;
       pkg.seq = String(preloadSession.nextAssignSeq++);
       $('#preloadAssignCounterBadge').text(`Next: #${preloadSession.nextAssignSeq}`);
@@ -1695,19 +2076,39 @@ function handlePreloadBarcodeScan(rawCode) {
       displayAddr = (pkg.zip ? `[ZIP ${pkg.zip}] ` : '') + pkg.address;
     }
 
+    // 1. Large Sequence Number
     $('#preloadLastSeq').text(displaySeq);
     $('#preloadSeqStatus').text(isAlreadyScanned ? 'ALREADY SCANNED' : 'MATCH · SAVED');
+
+    // 2. High-contrast Driver + Route Badge
+    const driverBadgeHtml = `
+      <span class="driver-route-badge" style="background:${pkg.routeColor || '#FF5A1F'}; font-size:12px; padding:4px 10px;">
+        <i class="bi bi-person-fill"></i> ${escapeHtml((pkg.fullLabel || pkg.driverName || 'DRIVER').toUpperCase())} (${escapeHtml(pkg.routeShortCode || 'R1')})
+      </span>
+    `;
+    $('#preloadLastDriverBadge').html(driverBadgeHtml).show();
+
+    // 3. Details Card
     $('#preloadLastAddress').text(displayAddr);
     $('#preloadLastBarcode').text(pkg.barcode + ' · ' + new Date(pkg.scannedAt).toLocaleTimeString());
+    $('#preloadLastDriverRouteTag').html(driverBadgeHtml).show();
 
+    // 4. Audio & Voice Cue (Division of Labor announcement)
     if (isAlreadyScanned) {
       playPreloadAudio('duplicate');
       triggerPreloadHaptic();
-      showToast(`Already scanned: Seq ${displaySeq} (${pkg.barcode})`, 'warn');
+      showToast(`Already scanned: [${pkg.routeShortCode || 'R1'}] ${displaySeq} (${pkg.driverName || 'Driver'})`, 'warn');
     } else {
       playPreloadAudio('success');
       triggerPreloadHaptic();
-      showToast(`Scanned Seq ${displaySeq} (${pkg.barcode})`, 'ok');
+
+      if (preloadVoiceEnabled) {
+        const routeNum = (pkg.routeLabel || '').replace(/[^0-9]/g, '');
+        const routePart = routeNum ? 'Route ' + routeNum : '';
+        speakText(`${pkg.driverName || 'Driver'} ${routePart}, ${pkg.seq}`);
+      }
+
+      showToast(`Scanned [${pkg.routeShortCode || 'R1'}] ${displaySeq} for ${pkg.driverName || 'Driver'}`, 'ok');
     }
 
     savePreloadSession();
@@ -1720,48 +2121,22 @@ function handlePreloadBarcodeScan(rawCode) {
       setTimeout(() => row.removeClass('table-success'), 1200);
     }
   } else {
-    // Fuzzy address match fallback
-    let closestPkg = null;
-    if (originalRawCode && originalRawCode.length >= 10) {
-      const rawUpper = originalRawCode.toUpperCase();
-      let bestScore = 0;
-
-      for (const p of preloadSession.packages) {
-        if (!p.address) continue;
-        const addressUpper = p.address.toUpperCase();
-        const streetMatch = addressUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
-        let streetName = "";
-        if (streetMatch && streetMatch[1]) {
-          streetName = streetMatch[1].split(/(?:APT|UNIT|STE|#|SUITE|FL)\b/)[0].trim();
-        } else {
-          streetName = addressUpper.replace(/\d+/g, '').trim();
-        }
-
-        if (streetName.length >= 4 && rawUpper.includes(streetName)) {
-          if (streetName.length > bestScore) {
-            bestScore = streetName.length;
-            closestPkg = p;
-          }
-        }
-      }
-    }
-
+    // Barcode not in ANY driver manifest - MIS-SORT ALERT
     playPreloadAudio('unknown');
     triggerPreloadHaptic();
 
-    if (closestPkg) {
-      $('#preloadLastSeq').text('~' + closestPkg.seq);
-      $('#preloadSeqStatus').text('CLOSE MATCH');
-      $('#preloadLastAddress').text('Close to: ' + closestPkg.address);
-      $('#preloadLastBarcode').text('UNSEQUENCED · ' + code);
-      showToast(`Not found, but close to #${closestPkg.seq}`, 'warn');
-    } else {
-      $('#preloadLastSeq').text('#???');
-      $('#preloadSeqStatus').text('NOT IN MANIFEST');
-      $('#preloadLastAddress').text('NOT FOUND IN PRELOAD MANIFEST');
-      $('#preloadLastBarcode').text(code + ' · Check package!');
-      showToast(`Barcode ${code} not in manifest!`, 'err');
+    if (preloadVoiceEnabled) {
+      speakText("Warning: Not in any manifest");
     }
+
+    $('#preloadLastSeq').text('#???');
+    $('#preloadSeqStatus').text('NOT IN ANY MANIFEST');
+    $('#preloadLastDriverBadge').html('<span class="badge bg-danger fs-6 py-1 px-2"><i class="bi bi-x-octagon-fill me-1"></i>MIS-SORT / NOT IN POOL</span>').show();
+    $('#preloadLastAddress').text('NOT FOUND IN ANY UPLOADED DRIVER MANIFEST');
+    $('#preloadLastBarcode').text(code + ' · Check package!');
+    $('#preloadLastDriverRouteTag').hide().empty();
+
+    showToast(`Barcode ${code} NOT in any driver manifest!`, 'err');
   }
 }
 
@@ -1922,6 +2297,103 @@ async function loopPreloadCamera() {
 
 /* -------------------------------------------------- Completion & Export -------------------------------------------------- */
 
+function renderPreloadExportDropdown() {
+  const menu = $('#preloadExportDropdownMenu');
+  if (!menu.length) return;
+  menu.empty();
+
+  if (!preloadSession || !preloadSession.packages) return;
+
+  const scannedPkgs = preloadSession.packages.filter(p => p.status === 'prescanned');
+  const routes = preloadSession.routes || [];
+
+  let html = `
+    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Box Scanner Integration</h6></li>
+    <li>
+      <a class="dropdown-item py-2 fw-semibold" href="javascript:void(0)" onclick="sendPreloadToBulkTask('all')">
+        <i class="bi bi-upc-scan me-2 text-primary"></i>Send All Scanned to Box Scanner (${scannedPkgs.length})
+      </a>
+    </li>
+  `;
+
+  if (routes.length > 1) {
+    routes.forEach(r => {
+      const rScanned = scannedPkgs.filter(p => p.routeId === r.id).length;
+      html += `
+        <li>
+          <a class="dropdown-item py-1 ps-4 small" href="javascript:void(0)" onclick="sendPreloadToBulkTask('${r.id}')">
+            <span class="driver-route-badge me-2" style="background:${r.color}; font-size:10px;">${escapeHtml(r.shortCode)}</span>
+            Send ${escapeHtml(r.fullLabel)} (${rScanned} pkgs)
+          </a>
+        </li>
+      `;
+    });
+  }
+
+  html += `
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Route Planning Apps (Scanned Only)</h6></li>
+    <li>
+      <a class="dropdown-item py-2 fw-semibold" href="javascript:void(0)" onclick="exportUniversalManifest('circuit', 'all')">
+        <i class="bi bi-signpost-split me-2 text-primary"></i>Spoke / Circuit — All Scanned (${scannedPkgs.length})
+      </a>
+    </li>
+  `;
+
+  if (routes.length > 1) {
+    routes.forEach(r => {
+      const rScanned = scannedPkgs.filter(p => p.routeId === r.id).length;
+      html += `
+        <li>
+          <a class="dropdown-item py-1 ps-4 small" href="javascript:void(0)" onclick="exportUniversalManifest('circuit', '${r.id}')">
+            <span class="driver-route-badge me-2" style="background:${r.color}; font-size:10px;">${escapeHtml(r.shortCode)}</span>
+            Circuit: ${escapeHtml(r.fullLabel)} (${rScanned} stops)
+          </a>
+        </li>
+      `;
+    });
+  }
+
+  html += `
+    <li>
+      <a class="dropdown-item py-2 fw-semibold" href="javascript:void(0)" onclick="exportUniversalManifest('roadwarrior', 'all')">
+        <i class="bi bi-compass me-2 text-danger"></i>RoadWarrior — All Scanned (${scannedPkgs.length})
+      </a>
+    </li>
+  `;
+
+  if (routes.length > 1) {
+    routes.forEach(r => {
+      const rScanned = scannedPkgs.filter(p => p.routeId === r.id).length;
+      html += `
+        <li>
+          <a class="dropdown-item py-1 ps-4 small" href="javascript:void(0)" onclick="exportUniversalManifest('roadwarrior', '${r.id}')">
+            <span class="driver-route-badge me-2" style="background:${r.color}; font-size:10px;">${escapeHtml(r.shortCode)}</span>
+            RoadWarrior: ${escapeHtml(r.fullLabel)} (${rScanned} stops)
+          </a>
+        </li>
+      `;
+    });
+  }
+
+  html += `
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Raw Warehouse Backup (Unfiltered)</h6></li>
+    <li>
+      <a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('xlsx')">
+        <i class="bi bi-file-earmark-excel me-2 text-success"></i>Download Full Manifest (XLSX)
+      </a>
+    </li>
+    <li>
+      <a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('csv')">
+        <i class="bi bi-filetype-csv me-2 text-secondary"></i>Download Clean Manifest (CSV)
+      </a>
+    </li>
+  `;
+
+  menu.html(html);
+}
+
 function openPreloadCompleteModal() {
   if (!preloadSession || !preloadSession.packages || !preloadSession.packages.length) {
     showToast('No active session to complete', 'warn');
@@ -1939,16 +2411,11 @@ function openPreloadCompleteModal() {
   $('#modalPendingCount').text(pendingCount);
   $('#modalTotalCount').text(preloadSession.packages.length);
   $('#modalRatePercent').text(ratePct + '%');
-  $('#preloadCompleteSummaryText').html(
-    `Pre-scanned <strong>${scannedPkgs.length}</strong> of <strong>${preloadSession.packages.length}</strong> packages (${pendingCount} pending).`
-  );
 
-  // Scanned barcodes list for textareas
   const lines = scannedPkgs.map(p => p.barcode);
   $('#preloadCompleteBarcodeList').val(lines.join('\n'));
   $('#preloadScannedListTextarea').val(lines.join('\n'));
 
-  // Show Bootstrap modal
   const modalEl = document.getElementById('preloadCompleteModal');
   if (modalEl) {
     if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -1999,18 +2466,28 @@ function downloadPreloadScannedTxt() {
   showToast('Downloaded text list', 'ok');
 }
 
-function exportUniversalManifest(exportType) {
+// Scanned-Only Route Exports for Circuit/Spoke & RoadWarrior
+function exportUniversalManifest(exportType, targetRouteId = 'all') {
   if (!preloadSession || !preloadSession.packages || !preloadSession.packages.length) {
     showToast('No active manifest to export', 'warn');
     return;
   }
 
   let pkgs = preloadSession.packages;
-  if (preloadZipFilter !== 'all') {
-    pkgs = pkgs.filter(p => (p.zip || '').trim() === preloadZipFilter);
-  }
 
-  if (exportType === 'scanned_only') {
+  // Enforce Scanned-Only for Routing Apps
+  if (exportType === 'circuit' || exportType === 'roadwarrior') {
+    pkgs = pkgs.filter(p => p.status === 'prescanned');
+
+    if (targetRouteId && targetRouteId !== 'all') {
+      pkgs = pkgs.filter(p => p.routeId === targetRouteId);
+    }
+
+    if (!pkgs.length) {
+      showToast('Cannot export to route: 0 packages have been scanned for this route yet. Please scan packages first.', 'warn');
+      return;
+    }
+  } else if (exportType === 'scanned_only') {
     pkgs = pkgs.filter(p => p.status === 'prescanned');
     if (!pkgs.length) {
       showToast('No scanned packages to export', 'warn');
@@ -2018,9 +2495,20 @@ function exportUniversalManifest(exportType) {
     }
   }
 
+  // Sort by sequence number ascending
+  pkgs.sort((a, b) => {
+    const numA = parseFloat(a.seq) || 999999;
+    const numB = parseFloat(b.seq) || 999999;
+    return numA - numB;
+  });
+
   const stamp = new Date().toISOString().slice(0, 10);
+  const routeObj = targetRouteId && targetRouteId !== 'all' && preloadSession.routes
+    ? preloadSession.routes.find(r => r.id === targetRouteId)
+    : null;
+
+  const driverSlug = routeObj ? `_${routeObj.driverName}_${routeObj.shortCode}`.replace(/[^a-zA-Z0-9_]/g, '') : '_AllDrivers';
   const baseFilename = (preloadSession.filename || 'manifest').replace(/\.[^/.]+$/, '');
-  const zipSuffix = preloadZipFilter !== 'all' ? `_zip_${preloadZipFilter}` : '';
 
   if (exportType === 'circuit') {
     // Spoke / Circuit format
@@ -2033,10 +2521,10 @@ function exportUniversalManifest(exportType) {
       'Recipient Name': p.recipient || '',
       'Recipient Phone': p.phone || '',
       'Package ID': p.barcode,
-      'Notes': (p.route ? `Route: ${p.route} | ` : '') + `Status: ${p.status}`
+      'Notes': `[${p.routeShortCode || 'R1'}] ${p.driverName || 'Driver'} | Status: Scanned`
     }));
-    downloadExportFile(data, `${baseFilename}${zipSuffix}_circuit_${stamp}`, 'csv');
-    showToast(`Exported ${data.length} stops for Circuit / Spoke`, 'ok');
+    downloadExportFile(data, `${baseFilename}${driverSlug}_circuit_${stamp}`, 'csv');
+    showToast(`Exported ${data.length} scanned stops for Spoke / Circuit`, 'ok');
   } else if (exportType === 'roadwarrior') {
     // RoadWarrior format
     // Stop Number, Street Address, Postal Code, Notes, Package ID
@@ -2044,15 +2532,18 @@ function exportUniversalManifest(exportType) {
       'Stop Number': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
       'Street Address': p.address,
       'Postal Code': p.zip || '',
-      'Notes': [p.recipient, p.phone, p.route].filter(Boolean).join(' | '),
+      'Notes': `[${p.routeShortCode || 'R1'}] ${p.driverName || 'Driver'}` + (p.recipient ? ' | ' + p.recipient : ''),
       'Package ID': p.barcode
     }));
-    downloadExportFile(data, `${baseFilename}${zipSuffix}_roadwarrior_${stamp}`, 'csv');
-    showToast(`Exported ${data.length} stops for RoadWarrior`, 'ok');
+    downloadExportFile(data, `${baseFilename}${driverSlug}_roadwarrior_${stamp}`, 'csv');
+    showToast(`Exported ${data.length} scanned stops for RoadWarrior`, 'ok');
   } else if (exportType === 'xlsx') {
-    // Full Clean XLSX
+    // Full Clean XLSX Backup
     const data = pkgs.map((p, idx) => ({
       'Stop #': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Driver': p.driverName || '',
+      'Route': p.fullLabel || '',
+      'Short Code': p.routeShortCode || '',
       'Barcode': p.barcode,
       'Street Address': p.primaryAddr || p.address,
       'Unit / Apt': p.unit || '',
@@ -2061,17 +2552,18 @@ function exportUniversalManifest(exportType) {
       'State': p.state || '',
       'Recipient Name': p.recipient || '',
       'Phone': p.phone || '',
-      'Route': p.route || '',
       'Weight': p.weight || '',
       'Status': p.status,
       'Scanned Time': p.scannedAt ? new Date(p.scannedAt).toLocaleTimeString() : ''
     }));
-    downloadExportFile(data, `${baseFilename}${zipSuffix}_clean_${stamp}`, 'xlsx');
+    downloadExportFile(data, `${baseFilename}_backup_${stamp}`, 'xlsx');
     showToast(`Exported ${data.length} packages to Excel`, 'ok');
   } else {
-    // Clean CSV or scanned_only CSV
+    // Clean CSV
     const data = pkgs.map((p, idx) => ({
       'Stop #': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Driver': p.driverName || '',
+      'Route Code': p.routeShortCode || '',
       'Barcode': p.barcode,
       'Street Address': p.primaryAddr || p.address,
       'Unit / Apt': p.unit || '',
@@ -2080,12 +2572,10 @@ function exportUniversalManifest(exportType) {
       'State': p.state || '',
       'Recipient Name': p.recipient || '',
       'Phone': p.phone || '',
-      'Route': p.route || '',
       'Status': p.status,
       'Scanned Time': p.scannedAt ? new Date(p.scannedAt).toLocaleTimeString() : ''
     }));
-    const suffix = exportType === 'scanned_only' ? '_scanned' : '_clean';
-    downloadExportFile(data, `${baseFilename}${zipSuffix}${suffix}_${stamp}`, 'csv');
+    downloadExportFile(data, `${baseFilename}_clean_${stamp}`, 'csv');
     showToast(`Exported ${data.length} packages to CSV`, 'ok');
   }
 }
@@ -2120,20 +2610,32 @@ function downloadExportFile(dataRows, filename, ext) {
   }
 }
 
-function sendPreloadToBulkTask() {
+// Push scanned packages directly into Box Scanner (Bulk Task)
+function sendPreloadToBulkTask(targetRouteId = 'all') {
   if (!preloadSession || !preloadSession.packages) return;
 
-  const scannedPkgs = preloadSession.packages.filter(p => p.status === 'prescanned');
+  let scannedPkgs = preloadSession.packages.filter(p => p.status === 'prescanned');
+  if (targetRouteId && targetRouteId !== 'all') {
+    scannedPkgs = scannedPkgs.filter(p => p.routeId === targetRouteId);
+  }
+
   if (!scannedPkgs.length) {
-    showToast('No pre-scanned barcodes to send', 'warn');
+    showToast('No pre-scanned packages found to send to Box Scanner', 'warn');
     return;
   }
 
-  // Format as: "BARCODE, ADDRESS (Seq #X)"
-  const entries = scannedPkgs.map(p => `${p.barcode}, ${p.address} (Seq #${p.seq})`);
+  // Sort strictly by Sequence Number so driver can scan off screen in stop order
+  scannedPkgs.sort((a, b) => {
+    const numA = parseFloat(a.seq) || 999999;
+    const numB = parseFloat(b.seq) || 999999;
+    return numA - numB;
+  });
+
+  // Format as: "BARCODE, [DRIVER-R1] Stop #X - ADDRESS"
+  const entries = scannedPkgs.map(p => `${p.barcode}, [${p.routeShortCode || 'R1'}] Stop #${p.seq} - ${p.address}`);
   $('#barcodesBatchText').val(entries.join('\n'));
 
-  // Close modal
+  // Close modal if open
   const modalEl = document.getElementById('preloadCompleteModal');
   if (modalEl) {
     if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -2157,7 +2659,7 @@ function sendPreloadToBulkTask() {
   // Automatically process batch so barcodes render immediately
   setTimeout(() => {
     processBatch();
-    showToast(`Loaded ${scannedPkgs.length} scanned package(s) into Bulk Task for final load scan`, 'ok');
+    showToast(`Loaded ${scannedPkgs.length} scanned package(s) into Box Scanner in stop order!`, 'ok');
   }, 300);
 }
 

@@ -108,98 +108,41 @@
           <!-- Active Manifest Dashboard -->
           <div id="preloadActiveSection" style="display:none;">
 
-            <!-- Manifest Head & Stat Strip Panel -->
-            <div class="panel">
-              <div class="manifest-head">
-                <div>
-                  <div class="manifest-title" id="preloadSessionFilename">manifest.csv</div>
-                  <div class="manifest-sub" id="preloadSessionTime">Loaded Just Now</div>
-                </div>
-                <div class="chip active" id="preloadSessionChip">ACTIVE</div>
+            <!-- 1. FLUSH SLIM STATUS STRIP -->
+            <div class="preload-status-strip px-3 py-2 d-flex align-items-center justify-content-between border-bottom" id="preloadStatusStrip">
+              <div class="d-flex align-items-center gap-2 text-truncate me-2">
+                <span class="badge bg-primary" id="preloadPoolBadge" style="font-size:11px; font-weight:700;">Active Pool</span>
+                <span class="fw-bold text-dark text-truncate" id="preloadSessionMiniInfo" style="font-size:12px;">0 Total • 0 Scanned • 0 Pending</span>
               </div>
-
-              <!-- Schema & Courier Auto-Detection Badges -->
-              <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top" id="preloadSchemaInfoRow">
-                <span class="badge bg-primary" id="preloadCourierBadge" style="font-size:11px;">Manifest Loaded</span>
-                <span class="badge bg-warning text-dark d-none" id="preloadUnsequencedBadge" style="font-size:11px;">
-                  <i class="bi bi-exclamation-triangle-fill me-1"></i>UNSEQUENCED BATCH
-                </span>
-                <span class="small text-muted" id="preloadSchemaMappingText" style="font-size:11px;">
-                  Auto-mapped headers
-                </span>
-              </div>
-
-              <div class="stat-strip">
-                <div class="stat-cell">
-                  <div class="stat-num" id="preloadTotalCount">0</div>
-                  <div class="stat-label">Total</div>
-                </div>
-                <div class="stat-cell">
-                  <div class="stat-num" style="color:var(--success)" id="preloadScannedCount">0</div>
-                  <div class="stat-label">Scanned</div>
-                </div>
-                <div class="stat-cell">
-                  <div class="stat-num" style="color:var(--warn)" id="preloadPendingCount">0</div>
-                  <div class="stat-label">Pending</div>
-                </div>
-                <div class="stat-cell">
-                  <div class="stat-num" style="color:var(--blue)" id="preloadProgressPercent">0%</div>
-                  <div class="stat-label">Progress</div>
-                </div>
-              </div>
-
-              <div class="progress-row">
-                <div class="progress-track"><div class="progress-fill" id="preloadProgressFill"></div></div>
-                <div class="progress-pct" id="preloadProgressFraction">0 / 0</div>
+              <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" type="button" onclick="openAddDriverModal()" title="Add another driver manifest to pool">
+                  <i class="bi bi-person-plus-fill me-1"></i>+ Driver
+                </button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" type="button" onclick="openSplitManifestModal()" title="Split manifest across multiple drivers">
+                  <i class="bi bi-diagram-3-fill me-1"></i>Split
+                </button>
+                <button class="btn btn-sm btn-link p-0 text-muted ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#preloadSummaryDetailsCollapse" title="Toggle detailed stats">
+                  <i class="bi bi-chevron-down" id="preloadSummaryToggleIcon"></i>
+                </button>
               </div>
             </div>
 
-            <!-- Active Scan & Box Numbering Console Panel -->
-            <div class="panel preload-console-panel">
-              <!-- Warehouse Sorting Mode & Zip Filter Strip -->
-              <div class="preload-control-strip mb-2 p-2 rounded border" style="background:var(--paper);">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                  <!-- Scan Mode Selector -->
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="small fw-bold text-muted" style="font-size:11.5px;">
-                      <i class="bi bi-sliders me-1"></i>Scan Mode:
-                    </span>
-                    <div class="btn-group btn-group-sm" id="preloadScanModeGroup">
-                      <button type="button" class="btn btn-outline-secondary active py-0 px-2" style="font-size:11px;" id="modeVerifyBtn" onclick="setPreloadScanMode('verify')" title="Verify against sequence numbers in manifest">
-                        <i class="bi bi-check2-circle me-1"></i>Verify Manifest
-                      </button>
-                      <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:11px;" id="modeAssignBtn" onclick="setPreloadScanMode('assign')" title="Assign sequential stop numbers (1, 2, 3...) as packages are scanned">
-                        <i class="bi bi-sort-numeric-down me-1"></i>Scan &amp; Assign Seq
-                      </button>
-                    </div>
-                    <span class="badge bg-light text-muted border" id="preloadAssignCounterBadge" style="font-size:10px; display:none;">Next: #1</span>
-                  </div>
-
-                  <!-- Zip Code Filter -->
-                  <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small" style="font-size:11.5px;">Zip Code:</span>
-                    <select id="preloadZipFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadZipFilterChange()">
-                      <option value="all">All Zip Codes</option>
-                    </select>
-                  </div>
-                </div>
-
-                <!-- Unsequenced batch notice -->
-                <div id="preloadUnsequencedNotice" class="small text-warning mt-1 pt-1 border-top d-none" style="font-size:11px;">
-                  <i class="bi bi-exclamation-circle-fill me-1"></i>Unsequenced batch detected (e.g. SpeedX all 0s). Use <strong>Scan &amp; Assign Seq</strong> to number boxes sequentially as you scan, or filter by Zip Code.
-                </div>
-              </div>
-
+            <!-- 2. SCANNER CONSOLE (IMMEDIATELY BELOW STATUS STRIP - ZERO SCROLLING REQUIRED!) -->
+            <div class="panel preload-console-panel pt-2">
+              
               <!-- TOP ROW: Large Display on Left + Compact Rectangular Camera Viewfinder on Right -->
               <div class="preload-top-scanner-grid mb-2">
                 
-                <!-- LEFT: Large Sequence Number Display -->
+                <!-- LEFT: Large Sequence Number Display & High-contrast Driver Badge -->
                 <div class="preload-seq-card" id="preloadSeqCard">
                   <div class="d-flex justify-content-between align-items-center mb-1 w-100">
-                    <span class="text-uppercase small fw-bold text-muted" style="font-size:10.5px; letter-spacing:0.04em;">
-                      <i class="bi bi-broadcast me-1" style="color:var(--accent);"></i>Sequence #
+                    <span class="text-uppercase small fw-bold text-muted d-flex align-items-center gap-1" style="font-size:10.5px; letter-spacing:0.04em;">
+                      <i class="bi bi-broadcast" style="color:var(--accent);"></i>Sequence #
                     </span>
-                    <div class="d-flex gap-1 align-items-center">
+                    <div class="d-flex gap-2 align-items-center">
+                      <button type="button" class="btn-icon p-0" id="preloadVoiceToggle" onclick="togglePreloadVoice()" title="Toggle voice announcements">
+                        <i class="bi bi-megaphone" id="preloadVoiceIcon" style="color:var(--muted); font-size:1rem;"></i>
+                      </button>
                       <button type="button" class="btn-icon p-0" id="preloadSoundToggle" onclick="togglePreloadSound()" title="Toggle scan sound">
                         <i class="bi bi-volume-up-fill" id="preloadSoundIcon" style="color:var(--accent); font-size:1rem;"></i>
                       </button>
@@ -208,6 +151,10 @@
                       </button>
                     </div>
                   </div>
+
+                  <!-- High-contrast Driver / Route Badge -->
+                  <div id="preloadLastDriverBadge" class="mb-1" style="display:none;"></div>
+
                   <div class="preload-seq-badge" id="preloadLastSeq">#---</div>
                   <div class="preload-seq-status small text-muted" id="preloadSeqStatus">Ready for scan</div>
                 </div>
@@ -240,12 +187,15 @@
 
               </div>
 
-              <!-- DETAILS: Address and Barcode (Immediately below display & camera) -->
+              <!-- DETAILS: Address, Barcode, Driver/Route Tag -->
               <div class="preload-details-card mb-2">
-                <div class="preload-address-text" id="preloadLastAddress">Scan a barcode to display sequence #</div>
+                <div class="preload-address-text" id="preloadLastAddress">Scan a package barcode to begin sorting</div>
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-1 mt-1">
                   <div class="preload-barcode-text" id="preloadLastBarcode">Ready for scanner</div>
-                  <div id="preloadCarrierTag" class="badge bg-light text-muted border" style="font-size:10px;">Auto-Detect</div>
+                  <div class="d-flex align-items-center gap-1">
+                    <span id="preloadLastDriverRouteTag" style="display:none;"></span>
+                    <div id="preloadCarrierTag" class="badge bg-light text-muted border" style="font-size:10px;">Auto-Detect</div>
+                  </div>
                 </div>
               </div>
 
@@ -256,6 +206,48 @@
                   <input type="text" id="preloadScanInput" class="scan-input mono" placeholder="Scan or enter barcode..." style="text-transform: uppercase;" autocomplete="off">
                 </div>
                 <button class="btn primary" style="flex:0 0 auto; padding:9px 16px; font-size:13.5px;" type="button" onclick="submitPreloadManualScan()">Read</button>
+              </div>
+
+              <!-- Team Filter & Warehouse Sorting Controls -->
+              <div class="preload-control-strip mb-2 p-2 rounded border" style="background:var(--paper);">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <!-- Mode Selector -->
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="small fw-bold text-muted" style="font-size:11px;">
+                      <i class="bi bi-sliders me-1"></i>Mode:
+                    </span>
+                    <div class="btn-group btn-group-sm" id="preloadScanModeGroup">
+                      <button type="button" class="btn btn-outline-secondary active py-0 px-2" style="font-size:11px;" id="modeVerifyBtn" onclick="setPreloadScanMode('verify')" title="Verify against sequence numbers in manifest">
+                        Verify
+                      </button>
+                      <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:11px;" id="modeAssignBtn" onclick="setPreloadScanMode('assign')" title="Assign sequential stop numbers (1, 2, 3...) as packages are scanned">
+                        Assign Seq
+                      </button>
+                    </div>
+                    <span class="badge bg-light text-muted border" id="preloadAssignCounterBadge" style="font-size:10px; display:none;">Next: #1</span>
+                  </div>
+
+                  <!-- Driver / Route Filter -->
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small" style="font-size:11px;">Driver:</span>
+                    <select id="preloadDriverFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadDriverFilterChange()">
+                      <option value="all">All Drivers</option>
+                    </select>
+                  </div>
+
+                  <!-- Zip Code Filter -->
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small" style="font-size:11px;">Zip:</span>
+                    <select id="preloadZipFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadZipFilterChange()">
+                      <option value="all">All Zips</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Unsequenced batch notice -->
+                <div id="preloadUnsequencedNotice" class="small text-warning mt-1 pt-1 border-top d-none" style="font-size:11px;">
+                  <i class="bi bi-exclamation-circle-fill me-1"></i>Unsequenced batch detected (e.g. SpeedX all 0s). Use <strong>Assign Seq</strong> to number boxes sequentially as you scan, or filter by Zip Code.
+                </div>
               </div>
 
               <!-- Carrier Filter and Quick Action Row -->
@@ -275,6 +267,63 @@
                 </div>
               </div>
 
+            </div>
+
+            <!-- 3. COLLAPSIBLE SUMMARY & TEAM DRIVERS OVERVIEW -->
+            <div class="collapse" id="preloadSummaryDetailsCollapse">
+              <div class="panel mt-2">
+                <div class="manifest-head">
+                  <div>
+                    <div class="manifest-title" id="preloadSessionFilename">manifest.csv</div>
+                    <div class="manifest-sub" id="preloadSessionTime">Loaded Just Now</div>
+                  </div>
+                  <div class="chip active" id="preloadSessionChip">ACTIVE POOL</div>
+                </div>
+
+                <!-- Team Drivers Summary Cards -->
+                <div class="mt-2 mb-2">
+                  <div class="small fw-bold text-muted mb-1 d-flex justify-content-between align-items-center" style="font-size:11px;">
+                    <span><i class="bi bi-people-fill me-1 text-primary"></i>Team Driver Routes:</span>
+                    <a href="javascript:void(0)" onclick="openAddDriverModal()" class="small text-decoration-none fw-semibold">+ Add Manifest</a>
+                  </div>
+                  <div class="driver-card-strip" id="preloadDriversSummaryStrip"></div>
+                </div>
+
+                <!-- Schema & Courier Auto-Detection Badges -->
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top" id="preloadSchemaInfoRow">
+                  <span class="badge bg-primary" id="preloadCourierBadge" style="font-size:11px;">Manifest Loaded</span>
+                  <span class="badge bg-warning text-dark d-none" id="preloadUnsequencedBadge" style="font-size:11px;">
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>UNSEQUENCED BATCH
+                  </span>
+                  <span class="small text-muted" id="preloadSchemaMappingText" style="font-size:11px;">
+                    Auto-mapped headers
+                  </span>
+                </div>
+
+                <div class="stat-strip">
+                  <div class="stat-cell">
+                    <div class="stat-num" id="preloadTotalCount">0</div>
+                    <div class="stat-label">Total</div>
+                  </div>
+                  <div class="stat-cell">
+                    <div class="stat-num" style="color:var(--success)" id="preloadScannedCount">0</div>
+                    <div class="stat-label">Scanned</div>
+                  </div>
+                  <div class="stat-cell">
+                    <div class="stat-num" style="color:var(--warn)" id="preloadPendingCount">0</div>
+                    <div class="stat-label">Pending</div>
+                  </div>
+                  <div class="stat-cell">
+                    <div class="stat-num" style="color:var(--blue)" id="preloadProgressPercent">0%</div>
+                    <div class="stat-label">Progress</div>
+                  </div>
+                </div>
+
+                <div class="progress-row">
+                  <div class="progress-track"><div class="progress-fill" id="preloadProgressFill"></div></div>
+                  <div class="progress-pct" id="preloadProgressFraction">0 / 0</div>
+                </div>
+              </div>
             </div>
 
             <!-- Live Scan Feed Panel -->
@@ -307,9 +356,10 @@
                     <thead>
                       <tr>
                         <th style="width:65px;">Seq #</th>
+                        <th style="width:115px;">Driver / Route</th>
                         <th>Barcode</th>
                         <th>Address</th>
-                        <th style="width:95px; text-align:center;">Status</th>
+                        <th style="width:90px; text-align:center;">Status</th>
                         <th style="width:75px; text-align:right;">Action</th>
                       </tr>
                     </thead>
@@ -323,19 +373,24 @@
             <div class="actionbar d-flex justify-content-between align-items-center gap-2">
               <div class="btn ghost" onclick="confirmResetPreload(false)">New manifest</div>
               <div class="d-flex gap-2">
+                <button class="btn ghost" type="button" onclick="sendPreloadToBulkTask()" title="Push verified scanned barcodes into Box Scanner (Bulk Task)">
+                  <i class="bi bi-box-arrow-in-right me-1 text-primary"></i>Box Scanner
+                </button>
                 <div class="dropdown">
                   <button class="btn ghost dropdown-toggle" type="button" id="preloadExportMenuBtn" data-bs-toggle="dropdown" aria-expanded="false" style="padding:10px 14px; font-size:13px;">
                     <i class="bi bi-box-arrow-up-right me-1"></i>Export
                   </button>
-                  <ul class="dropdown-menu dropdown-menu-end shadow border" aria-labelledby="preloadExportMenuBtn" style="font-size:12.5px; min-width:240px;">
-                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Route Planning Services</h6></li>
-                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('circuit')"><i class="bi bi-signpost-split me-2 text-primary"></i>Export for Spoke / Circuit (CSV)</a></li>
-                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('roadwarrior')"><i class="bi bi-compass me-2 text-danger"></i>Export for RoadWarrior (CSV)</a></li>
+                  <ul class="dropdown-menu dropdown-menu-end shadow border" id="preloadExportDropdownMenu" aria-labelledby="preloadExportMenuBtn" style="font-size:12.5px; min-width:280px;">
+                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Box Scanner Integration</h6></li>
+                    <li><a class="dropdown-item py-2 fw-semibold" href="javascript:void(0)" onclick="sendPreloadToBulkTask()"><i class="bi bi-upc-scan me-2 text-primary"></i>Send Scanned to Box Scanner (Bulk Task)</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Warehouse Manifest Files</h6></li>
+                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Route Planning (Scanned Only)</h6></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('circuit')"><i class="bi bi-signpost-split me-2 text-primary"></i>Spoke / Circuit (Scanned Only)</a></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('roadwarrior')"><i class="bi bi-compass me-2 text-danger"></i>RoadWarrior (Scanned Only)</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Raw Warehouse Backup (Unfiltered)</h6></li>
                     <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('xlsx')"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Download Full Manifest (XLSX)</a></li>
                     <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('csv')"><i class="bi bi-filetype-csv me-2 text-secondary"></i>Download Clean Manifest (CSV)</a></li>
-                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('scanned_only')"><i class="bi bi-check2-all me-2 text-info"></i>Export Scanned Only (CSV)</a></li>
                   </ul>
                 </div>
                 <div class="btn primary" id="preloadCompleteBtn" onclick="openPreloadCompleteModal()">Complete preload</div>
@@ -617,6 +672,108 @@
       </div>
     </div>
 
+    <!-- ADD DRIVER / ROUTE MANIFEST MODAL -->
+    <div class="modal fade" id="addDriverModal" tabindex="-1" aria-labelledby="addDriverModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header py-2 px-3">
+            <h6 class="modal-title fw-bold mb-0" id="addDriverModalLabel">
+              <i class="bi bi-person-plus-fill me-2 text-primary"></i>Add Driver / Route Manifest
+            </h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-3">
+            <div class="mb-3">
+              <label class="small fw-bold text-muted mb-1">Driver Name:</label>
+              <input type="text" id="addDriverNameInput" class="form-control form-control-sm" placeholder="e.g. Maria, John, Carlos" required>
+            </div>
+            <div class="mb-3">
+              <label class="small fw-bold text-muted mb-1">Route / Shift Name (Optional):</label>
+              <input type="text" id="addDriverRouteInput" class="form-control form-control-sm" placeholder="Auto-assigned (Route 1, Route 2...) if empty">
+            </div>
+
+            <div class="mb-3">
+              <label class="small fw-bold text-muted mb-1">Select Manifest File (.csv, .xlsx, .xls, .zip):</label>
+              <input type="file" id="addDriverFileInput" class="form-control form-control-sm" accept=".csv,.tsv,.txt,.xls,.xlsx,.zip">
+            </div>
+
+            <div class="mb-2">
+              <a class="btn-link-sub small" data-bs-toggle="collapse" href="#addDriverPasteCollapse" role="button">
+                <i class="bi bi-clipboard2-plus me-1"></i>Or paste raw text / CSV
+              </a>
+              <div class="collapse mt-2" id="addDriverPasteCollapse">
+                <textarea id="addDriverPasteText" class="form-control mono" rows="3" style="font-size:11px;" placeholder="Paste CSV or tab-delimited rows..."></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer py-2 px-3 d-flex justify-content-between">
+            <button type="button" class="btn ghost btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn primary btn-sm fw-bold" onclick="submitAddDriverManifest()">
+              <i class="bi bi-plus-circle me-1"></i>Add to Active Pool
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPLIT MANIFEST BY DRIVERS MODAL -->
+    <div class="modal fade" id="splitManifestModal" tabindex="-1" aria-labelledby="splitManifestModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+          <div class="modal-header py-2 px-3">
+            <h6 class="modal-title fw-bold mb-0" id="splitManifestModalLabel">
+              <i class="bi bi-diagram-3-fill me-2 text-primary"></i>Split Manifest Across Drivers
+            </h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-3">
+            <!-- Split Method Selector -->
+            <ul class="nav nav-pills nav-fill mb-3" id="splitMethodTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link active py-1 px-3 small fw-bold" id="splitByZipTab" data-bs-toggle="pill" data-bs-target="#splitByZipPane" type="button" role="tab">
+                  <i class="bi bi-geo-alt me-1"></i>Split by Zip Codes
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link py-1 px-3 small fw-bold" id="splitByCountTab" data-bs-toggle="pill" data-bs-target="#splitByCountPane" type="button" role="tab">
+                  <i class="bi bi-percent me-1"></i>Split by Number of Drivers
+                </button>
+              </li>
+            </ul>
+
+            <div class="tab-content" id="splitMethodTabContent">
+              <!-- Pane 1: Split by Zip Code -->
+              <div class="tab-pane fade show active" id="splitByZipPane" role="tabpanel">
+                <p class="small text-muted mb-2">Assign each Zip Code to a specific Driver Name:</p>
+                <div id="splitZipContainer" class="d-flex flex-column gap-2 mb-2"></div>
+              </div>
+
+              <!-- Pane 2: Split by Driver Count -->
+              <div class="tab-pane fade" id="splitByCountPane" role="tabpanel">
+                <div class="d-flex align-items-center gap-2 mb-3">
+                  <label class="small fw-bold text-muted mb-0">How many drivers?</label>
+                  <select id="splitDriverCountSelect" class="form-select form-select-sm w-auto" onchange="renderSplitCountInputs()">
+                    <option value="2">2 Drivers</option>
+                    <option value="3" selected>3 Drivers</option>
+                    <option value="4">4 Drivers</option>
+                    <option value="5">5 Drivers</option>
+                    <option value="6">6 Drivers</option>
+                  </select>
+                </div>
+                <div id="splitCountDriversContainer" class="d-flex flex-column gap-2 mb-2"></div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer py-2 px-3 d-flex justify-content-between">
+            <button type="button" class="btn ghost btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn primary btn-sm fw-bold" onclick="submitSplitManifest()">
+              <i class="bi bi-check2-circle me-1"></i>Apply Driver Split
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- PRELOAD COMPLETION MODAL -->
     <div class="modal fade" id="preloadCompleteModal" tabindex="-1" aria-labelledby="preloadCompleteModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -650,17 +807,20 @@
             <!-- Universal Route & Manifest Exports -->
             <div class="mb-3 p-2 bg-light rounded border">
               <div class="d-flex justify-content-between align-items-center mb-1">
-                <span class="small fw-bold text-muted" style="font-size:11px;">Export To Routing / Box Services:</span>
+                <span class="small fw-bold text-muted" style="font-size:11px;">Routing & Box Scanner Integration (Scanned Only):</span>
               </div>
               <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-primary fw-bold" onclick="sendPreloadToBulkTask()">
+                  <i class="bi bi-box-arrow-in-right me-1"></i>Send to Box Scanner
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportUniversalManifest('circuit')">
-                  <i class="bi bi-signpost-split me-1"></i>Spoke / Circuit (CSV)
+                  <i class="bi bi-signpost-split me-1"></i>Spoke / Circuit (Scanned Only)
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="exportUniversalManifest('roadwarrior')">
-                  <i class="bi bi-compass me-1"></i>RoadWarrior (CSV)
+                  <i class="bi bi-compass me-1"></i>RoadWarrior (Scanned Only)
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-success" onclick="exportUniversalManifest('xlsx')">
-                  <i class="bi bi-file-earmark-excel me-1"></i>Clean XLSX
+                  <i class="bi bi-file-earmark-excel me-1"></i>Full XLSX Backup
                 </button>
               </div>
             </div>
