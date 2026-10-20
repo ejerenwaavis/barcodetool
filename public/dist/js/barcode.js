@@ -666,6 +666,8 @@ let preloadSession = {
 let preloadSoundEnabled = true;
 let preloadVibrateEnabled = true;
 let preloadStatusFilter = 'all';
+let preloadScanMode = 'verify'; // 'verify' | 'assign'
+let preloadZipFilter = 'all';
 
 let preloadStream = null;
 let preloadDetector = null;
@@ -765,6 +767,8 @@ function togglePreloadVibrate() {
 function savePreloadSession() {
   try {
     if (preloadSession && preloadSession.active && preloadSession.packages.length) {
+      preloadSession.scanMode = preloadScanMode;
+      preloadSession.zipFilter = preloadZipFilter;
       localStorage.setItem(PRELOAD_STORAGE_KEY, JSON.stringify(preloadSession));
     } else {
       localStorage.removeItem(PRELOAD_STORAGE_KEY);
@@ -792,6 +796,8 @@ function initPreloadScan() {
       const parsed = JSON.parse(saved);
       if (parsed && parsed.packages && parsed.packages.length) {
         preloadSession = parsed;
+        if (parsed.scanMode) preloadScanMode = parsed.scanMode;
+        if (parsed.zipFilter) preloadZipFilter = parsed.zipFilter;
         const scannedCount = preloadSession.packages.filter(p => p.status === 'prescanned').length;
         $('#preloadResumeDetails').text(
           `${scannedCount} of ${preloadSession.packages.length} scanned (${preloadSession.filename || 'Manifest'})`
@@ -849,35 +855,114 @@ function initPreloadDropZone() {
 async function handlePreloadFileInput(file) {
   if (!file) return;
   const name = file.name || 'manifest.csv';
+  const lowerName = name.toLowerCase();
   showToast('Reading ' + name + '...', '');
 
-  if (name.toLowerCase().endsWith('.zip')) {
+  if (lowerName.endsWith('.zip')) {
     if (typeof JSZip === 'undefined') {
       showToast('ZIP library failed to load. Check internet connection.', 'err');
       return;
     }
     try {
       const zip = await JSZip.loadAsync(file);
-      let csvFile = null;
-      zip.forEach((relPath, zipEntry) => {
-        if (!csvFile && !zipEntry.dir && (relPath.toLowerCase().endsWith('.csv') || relPath.toLowerCase().endsWith('.txt'))) {
-          csvFile = zipEntry;
+      const manifestEntries = [];
+      zip.forEach((relPath, entry) => {
+        if (!entry.dir && !relPath.startsWith('__MACOSX/')) {
+          const lowerRel = relPath.toLowerCase();
+          if (lowerRel.endsWith('.csv') || lowerRel.endsWith('.tsv') || lowerRel.endsWith('.txt') ||
+              lowerRel.endsWith('.xlsx') || lowerRel.endsWith('.xls')) {
+            manifestEntries.push({ path: relPath, entry });
+          }
         }
       });
-      if (!csvFile) {
-        showToast('No CSV found inside ZIP archive', 'err');
+
+      if (!manifestEntries.length) {
+        showToast('No valid CSV, XLS, or XLSX manifests found inside ZIP archive', 'err');
         return;
       }
-      const text = await csvFile.async('string');
-      processPreloadCsvContent(text, csvFile.name || name);
+
+      showToast('Extracting ' + manifestEntries.length + ' file(s) from ZIP...', '');
+      let combinedRows = [];
+      let formatDetected = 'ZIP';
+
+      for (const item of manifestEntries) {
+        const itemLower = item.path.toLowerCase();
+        if (itemLower.endsWith('.xlsx') || itemLower.endsWith('.xls')) {
+          if (typeof XLSX === 'undefined') {
+            showToast('XLSX engine not ready yet. Please wait a moment.', 'err');
+            return;
+          }
+          const buffer = await item.entry.async('arraybuffer');
+          const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+          const rows = extractRowsFromWorkbook(wb);
+          if (rows && rows.length) {
+            combinedRows = combinedRows.concat(rows);
+            formatDetected = 'ZIP (XLSX)';
+          }
+        } else {
+          if (typeof Papa === 'undefined') {
+            showToast('CSV parser not available', 'err');
+            return;
+          }
+          const text = await item.entry.async('string');
+          const parsed = Papa.parse(text.trim(), { header: true, skipEmptyLines: 'greedy' });
+          if (parsed && parsed.data && parsed.data.length) {
+            combinedRows = combinedRows.concat(parsed.data);
+            formatDetected = 'ZIP (CSV)';
+          }
+        }
+      }
+
+      if (!combinedRows.length) {
+        showToast('Extracted files contained no readable rows', 'err');
+        return;
+      }
+
+      processRawManifestRows(combinedRows, name, formatDetected);
     } catch (err) {
       console.error(err);
-      showToast('Error reading ZIP file: ' + err.message, 'err');
+      showToast('Error extracting ZIP archive: ' + err.message, 'err');
     }
-  } else {
+  } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+    if (typeof XLSX === 'undefined') {
+      showToast('XLSX library is loading. Please try again in a few seconds.', 'err');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = function(evt) {
-      processPreloadCsvContent(evt.target.result, name);
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const rows = extractRowsFromWorkbook(wb);
+        if (!rows || !rows.length) {
+          showToast('No rows found in spreadsheet', 'err');
+          return;
+        }
+        processRawManifestRows(rows, name, lowerName.endsWith('.xlsx') ? 'XLSX' : 'XLS');
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to parse spreadsheet: ' + err.message, 'err');
+      }
+    };
+    reader.onerror = function() {
+      showToast('Failed to read spreadsheet file', 'err');
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // CSV, TSV, TXT
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const text = evt.target.result;
+      if (typeof Papa === 'undefined') {
+        showToast('CSV parser not available', 'err');
+        return;
+      }
+      const parsed = Papa.parse(text.trim(), { header: true, skipEmptyLines: 'greedy' });
+      if (!parsed.data || !parsed.data.length) {
+        showToast('No rows found in manifest', 'err');
+        return;
+      }
+      processRawManifestRows(parsed.data, name, 'CSV');
     };
     reader.onerror = function() {
       showToast('Failed to read manifest file', 'err');
@@ -886,66 +971,219 @@ async function handlePreloadFileInput(file) {
   }
 }
 
+function extractRowsFromWorkbook(wb) {
+  if (!wb || !wb.SheetNames || !wb.SheetNames.length) return [];
+  // Prioritize sheet named 'result' (SpeedX default), 'manifest', 'data', 'parcels', or first sheet
+  let sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'result');
+  if (!sheetName) sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'manifest');
+  if (!sheetName) sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'data');
+  if (!sheetName) sheetName = wb.SheetNames.find(n => n.toLowerCase() === 'parcels');
+  if (!sheetName) sheetName = wb.SheetNames[0];
+
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) return [];
+  return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+}
+
 function parsePastedManifest() {
   const text = $('#preloadPasteText').val().trim();
   if (!text) {
-    showToast('Please paste CSV text first', 'warn');
+    showToast('Please paste CSV or tab-delimited text first', 'warn');
     return;
   }
-  processPreloadCsvContent(text, 'Pasted-Manifest-' + new Date().toLocaleTimeString());
-}
-
-function processPreloadCsvContent(csvText, filename) {
   if (typeof Papa === 'undefined') {
     showToast('CSV parser not available', 'err');
     return;
   }
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: 'greedy' });
+  if (!parsed.data || !parsed.data.length) {
+    showToast('No rows parsed from clipboard text', 'err');
+    return;
+  }
+  processRawManifestRows(parsed.data, 'Pasted-Manifest-' + new Date().toLocaleTimeString(), 'Pasted');
+}
 
-  const parsed = Papa.parse(csvText.trim(), {
-    header: true,
-    skipEmptyLines: 'greedy'
-  });
+function normalizeHeaderKey(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+}
 
-  let rows = parsed.data;
+function isExcludedSeqHeader(cleanKey) {
+  if (!cleanKey) return false;
+  const EXCLUDED = [
+    'serial', 'serialno', 'serialnumber', 'sn', 'sno', 'srno', 'sr',
+    'row', 'rownum', 'rowno', 'index', 'idx',
+    'id', 'customeraccountid', 'accountid', 'transittime',
+    'itemid', 'parcelid', 'orderid', 'uid', 'uuid', 'barcodeid'
+  ];
+  return EXCLUDED.some(ex => cleanKey === ex || cleanKey.startsWith(ex + '_') || cleanKey.endsWith('_' + ex));
+}
+
+function processRawManifestRows(rows, filename, fileFormat) {
   if (!rows || !rows.length) {
-    showToast('No rows found in manifest', 'err');
+    showToast('No valid rows found in manifest', 'err');
     return;
   }
 
-  const firstRow = rows[0];
-  const keys = Object.keys(firstRow);
+  // Find non-empty row to get keys
+  let sampleRow = rows.find(r => r && Object.keys(r).length > 0) || rows[0];
+  const keys = Object.keys(sampleRow);
 
-  function findKey(patterns) {
-    return keys.find(k => {
-      const clean = k.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      return patterns.some(p => clean === p || clean.includes(p));
-    });
+  function findKey(aliases, excludeSeq = false) {
+    // 1. Exact match
+    for (const a of aliases) {
+      const found = keys.find(k => {
+        const clean = normalizeHeaderKey(k);
+        if (excludeSeq && isExcludedSeqHeader(clean)) return false;
+        return clean === a;
+      });
+      if (found) return found;
+    }
+    // 2. Contains match
+    for (const a of aliases) {
+      const found = keys.find(k => {
+        const clean = normalizeHeaderKey(k);
+        if (excludeSeq && isExcludedSeqHeader(clean)) return false;
+        if (a.length <= 3) {
+          return clean === a || clean.startsWith(a) || clean.endsWith(a);
+        }
+        return clean.includes(a);
+      });
+      if (found) return found;
+    }
+    return null;
   }
 
-  const barcodeKey = findKey(['barcode', 'tracking', 'trackingnumber', 'pkgid', 'code']);
-  const seqKey = findKey(['seqno', 'seq', 'sequenceno', 'sequence', 'stopno', 'stop']);
-  const addressKey = findKey(['address', 'deliveryaddress', 'destaddress', 'destination']);
+  // Column matching
+  const seqKey = findKey([
+    'seqno', 'sequenceno', 'seq', 'sequence', 'sequencenumber',
+    'stopnumber', 'stopno', 'stop', 'callsequence', 'routesequence',
+    'routingsort', 'seqnum', 'stopnum', 'deliverysequence', 'sortnumber'
+  ], true);
 
+  let barcodeKey = findKey([
+    'barcode', 'trackingno', 'trackingnumber', 'tracking',
+    'packageid', 'packageidentification', 'pkgid', 'tba',
+    'lasershipbarcode', 'awb', 'label', 'trackingcode',
+    'waybill', 'parcelno', 'parcelid'
+  ]);
+
+  // Pattern Fallback for Barcode if header matching failed or ambiguous
+  if (!barcodeKey) {
+    const testSamples = rows.slice(0, 15);
+    const patternRegex = /^(?:SPX[A-Z0-9]+|1LS[A-Z0-9]+|L[A-Z]{2}d+|TBAd+|C12[A-Z0-9]+|D100[A-Z0-9]+|[A-Z0-9]{10,32})$/i;
+    let bestKey = null;
+    let bestScore = 0;
+
+    keys.forEach(k => {
+      let score = 0;
+      testSamples.forEach(r => {
+        const val = String(r[k] || '').trim();
+        if (patternRegex.test(val)) score++;
+      });
+      if (score > bestScore && score >= Math.min(3, testSamples.length)) {
+        bestScore = score;
+        bestKey = k;
+      }
+    });
+
+    if (bestKey) {
+      barcodeKey = bestKey;
+    }
+  }
+
+  const addressKey = findKey([
+    'address', 'streetaddress', 'addressline1', 'address1',
+    'deliveryaddress', 'destaddress', 'destination', 'street',
+    'fulladdress', 'addr'
+  ]);
+
+  const unitKey = findKey([
+    'unit', 'addressline2', 'address2', 'apt', 'suite', 'ste',
+    'apartment', 'bldg', 'building', 'unitnumber'
+  ]);
+
+  const zipKey = findKey([
+    'zipcode', 'zip', 'postalcode', 'postal', 'postcode', 'pincode'
+  ]);
+
+  const cityKey = findKey(['city', 'town', 'municipality']);
+  const stateKey = findKey(['state', 'province', 'st']);
+
+  const recipientKey = findKey([
+    'recipientname', 'consignee', 'consigneename', 'customer',
+    'customername', 'recipient', 'contactname', 'name'
+  ]);
+
+  const phoneKey = findKey([
+    'recipientphone', 'consigneephone', 'phone', 'contact',
+    'telephone', 'tel', 'cell', 'mobile', 'phoneno'
+  ]);
+
+  const routeKey = findKey([
+    'route', 'routecode', 'batch', 'batchid', 'routeno', 'routename', 'driverroute'
+  ]);
+
+  const weightKey = findKey([
+    'weight', 'pkgweight', 'packageweight', 'weightlbs', 'weightkg'
+  ]);
+
+  // Build normalized packages list
   const packages = [];
   rows.forEach((row, idx) => {
-    let barcode = (barcodeKey && row[barcodeKey] ? row[barcodeKey] : '').trim();
-    let seq = (seqKey && row[seqKey] ? row[seqKey] : '').trim();
-    let address = (addressKey && row[addressKey] ? row[addressKey] : '').trim();
+    let rawBarcode = (barcodeKey && row[barcodeKey] !== undefined ? String(row[barcodeKey]) : '').trim();
+    let rawSeq = (seqKey && row[seqKey] !== undefined ? String(row[seqKey]) : '').trim();
+    let primaryAddr = (addressKey && row[addressKey] !== undefined ? String(row[addressKey]) : '').trim();
+    let unit = (unitKey && row[unitKey] !== undefined ? String(row[unitKey]) : '').trim();
+    let zip = (zipKey && row[zipKey] !== undefined ? String(row[zipKey]) : '').trim();
+    let city = (cityKey && row[cityKey] !== undefined ? String(row[cityKey]) : '').trim();
+    let state = (stateKey && row[stateKey] !== undefined ? String(row[stateKey]) : '').trim();
+    let recipient = (recipientKey && row[recipientKey] !== undefined ? String(row[recipientKey]) : '').trim();
+    let phone = (phoneKey && row[phoneKey] !== undefined ? String(row[phoneKey]) : '').trim();
+    let route = (routeKey && row[routeKey] !== undefined ? String(row[routeKey]) : '').trim();
+    let weight = (weightKey && row[weightKey] !== undefined ? String(row[weightKey]) : '').trim();
 
-    // Fallback if header matching missed
-    if (!barcode && Object.values(row).length) {
-      const vals = Object.values(row);
-      barcode = (vals[0] || '').trim();
-      seq = (vals[4] || '').trim();
-      address = (vals[5] || '').trim();
+    // Fallback if no barcodeKey matched: inspect row values for tracking pattern
+    if (!rawBarcode && Object.values(row).length) {
+      const vals = Object.values(row).map(v => String(v || '').trim()).filter(Boolean);
+      const barcodeCandidate = vals.find(v => /^(?:SPX|1LS|L[A-Z]{2}|TBA|[A-Z0-9]{10,32})/i.test(v));
+      if (barcodeCandidate) rawBarcode = barcodeCandidate;
     }
 
-    if (barcode) {
+    if (rawBarcode) {
+      let cleanBarcode = rawBarcode.replace(/["']/g, '').trim().toUpperCase();
+      if (cleanBarcode.includes('|')) cleanBarcode = cleanBarcode.split('|')[0].trim();
+
+      // Automatically append unit/address line 2 to display address if not already present
+      let displayAddress = primaryAddr;
+      if (unit) {
+        const uClean = unit.toUpperCase();
+        if (!displayAddress.toUpperCase().includes(uClean)) {
+          displayAddress = displayAddress ? `${displayAddress}, ${unit}` : unit;
+        }
+      }
+      if (!displayAddress) {
+        if (zip) {
+          displayAddress = (city ? city + ', ' : '') + (state ? state + ' ' : '') + zip;
+        } else {
+          displayAddress = 'No address specified';
+        }
+      }
+
       packages.push({
         id: 'pkg_' + (idx + 1),
-        barcode: barcode.toUpperCase(),
-        seq: seq || '?',
-        address: address || 'No address specified',
+        barcode: cleanBarcode,
+        seq: rawSeq || '?',
+        address: displayAddress,
+        primaryAddr: primaryAddr,
+        unit: unit,
+        zip: zip,
+        city: city,
+        state: state,
+        recipient: recipient,
+        phone: phone,
+        route: route,
+        weight: weight,
         status: 'pending',
         scannedAt: null,
         origIndex: idx
@@ -953,50 +1191,111 @@ function processPreloadCsvContent(csvText, filename) {
     }
   });
 
-  // Second pass to infer missing sequences based on street name
-  for (const pkg of packages) {
-    if (pkg.seq === '?') {
-      const targetUpper = pkg.address.toUpperCase();
-      const streetMatch = targetUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
-      let streetName = "";
-      if (streetMatch && streetMatch[1]) {
-        streetName = streetMatch[1].split(/(?:APT|UNIT|STE|#|SUITE|FL)\b/)[0].trim();
-      } else {
-        streetName = targetUpper.replace(/\d+/g, '').trim();
-      }
-      
-      if (streetName.length >= 4) {
-        for (const other of packages) {
-          const otherSeq = String(other.seq);
-          if (otherSeq !== '?' && !otherSeq.includes('.') && other.address.toUpperCase().includes(streetName)) {
-            pkg.seq = otherSeq + '.5';
-            break;
+  if (!packages.length) {
+    showToast('No valid barcodes found in manifest data', 'err');
+    return;
+  }
+
+  // Check if unsequenced batch (all sequence numbers are 0, empty, or '?')
+  const nonZeroSeqs = packages.filter(p => {
+    const s = String(p.seq).trim();
+    return s !== '' && s !== '?' && s !== '0' && s !== '0.0' && s !== '00';
+  });
+  const isUnsequenced = nonZeroSeqs.length === 0;
+
+  // Infer missing sequences based on street name ONLY if not unsequenced batch
+  if (!isUnsequenced) {
+    for (const pkg of packages) {
+      if (pkg.seq === '?') {
+        const targetUpper = pkg.address.toUpperCase();
+        const streetMatch = targetUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
+        let streetName = "";
+        if (streetMatch && streetMatch[1]) {
+          streetName = streetMatch[1].split(/(?:APT|UNIT|STE|#|SUITE|FL)\b/)[0].trim();
+        } else {
+          streetName = targetUpper.replace(/\d+/g, '').trim();
+        }
+
+        if (streetName.length >= 4) {
+          for (const other of packages) {
+            const otherSeq = String(other.seq);
+            if (otherSeq !== '?' && !otherSeq.includes('.') && other.address.toUpperCase().includes(streetName)) {
+              pkg.seq = otherSeq + '.5';
+              break;
+            }
           }
         }
       }
     }
   }
 
-  if (!packages.length) {
-    showToast('No valid barcodes found in manifest data', 'err');
-    return;
+  // Detect Courier Name & Schema Format
+  let courierName = 'Generic';
+  const sampleBarcodes = packages.slice(0, 30).map(p => p.barcode);
+  const sampleFilename = (filename || '').toLowerCase();
+
+  if (sampleBarcodes.some(b => b.startsWith('SPX')) || sampleFilename.includes('speedx') || sampleFilename.includes('route_parcel')) {
+    courierName = 'SpeedX';
+  } else if (sampleBarcodes.some(b => b.startsWith('1LS') || b.startsWith('D100') || b.startsWith('C12')) || sampleFilename.includes('lasership') || keys.some(k => k.toLowerCase().includes('lasership'))) {
+    courierName = 'LaserShip';
+  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'packageid')) {
+    courierName = 'Circuit / Spoke';
+  } else if (keys.some(k => normalizeHeaderKey(k) === 'stopnumber') && keys.some(k => normalizeHeaderKey(k) === 'streetaddress')) {
+    courierName = 'RoadWarrior';
   }
+
+  const schemaMapping = {
+    barcode: barcodeKey || 'Auto',
+    seq: seqKey || 'None',
+    address: addressKey || 'Auto',
+    unit: unitKey || null,
+    zip: zipKey || null,
+    recipient: recipientKey || null,
+    phone: phoneKey || null,
+    route: routeKey || null
+  };
 
   preloadSession = {
     filename: filename,
     timestamp: Date.now(),
     packages: packages,
+    courier: courierName,
+    courierBadge: `${courierName} ${fileFormat || 'Manifest'} (${packages.length} pkgs)`,
+    schemaMapping: schemaMapping,
+    isUnsequenced: isUnsequenced,
+    nextAssignSeq: 1,
     active: true
   };
+
+  // If unsequenced, default scan mode to 'assign'
+  if (isUnsequenced) {
+    preloadScanMode = 'assign';
+  } else {
+    preloadScanMode = 'verify';
+  }
+  preloadZipFilter = 'all';
 
   savePreloadSession();
   renderPreloadSessionUI();
   showToast(`Loaded ${packages.length} packages from ${filename}`, 'ok');
 
-  // Auto focus barcode scan input
   setTimeout(() => {
     $('#preloadScanInput').focus();
   }, 200);
+}
+
+// Backward-compatibility wrapper
+function processPreloadCsvContent(csvText, filename) {
+  if (typeof Papa === 'undefined') {
+    showToast('CSV parser not available', 'err');
+    return;
+  }
+  const parsed = Papa.parse(csvText.trim(), { header: true, skipEmptyLines: 'greedy' });
+  if (!parsed.data || !parsed.data.length) {
+    showToast('No rows found in manifest', 'err');
+    return;
+  }
+  processRawManifestRows(parsed.data, filename, 'CSV');
 }
 
 function resumePreloadSession() {
@@ -1023,6 +1322,9 @@ function confirmResetPreload(fromBanner) {
   preloadSession = { filename: '', timestamp: 0, packages: [], active: false };
   localStorage.removeItem(PRELOAD_STORAGE_KEY);
 
+  preloadScanMode = 'verify';
+  preloadZipFilter = 'all';
+
   $('#preloadResumeBanner').addClass('d-none').removeClass('d-flex');
   $('#preloadActiveSection').hide();
   $('#preloadUploadSection').show();
@@ -1045,14 +1347,90 @@ function renderPreloadSessionUI() {
     $('#preloadSessionTime').text('Loaded ' + new Date(preloadSession.timestamp).toLocaleTimeString());
   }
 
+  // Update Courier Badge & Schema Mapping
+  $('#preloadCourierBadge').text(preloadSession.courierBadge || `${preloadSession.courier || 'Universal'} (${preloadSession.packages.length} pkgs)`);
+
+  if (preloadSession.isUnsequenced) {
+    $('#preloadUnsequencedBadge').removeClass('d-none');
+    $('#preloadUnsequencedNotice').removeClass('d-none');
+  } else {
+    $('#preloadUnsequencedBadge').addClass('d-none');
+    $('#preloadUnsequencedNotice').addClass('d-none');
+  }
+
+  if (preloadSession.schemaMapping) {
+    const sm = preloadSession.schemaMapping;
+    let mapText = `Barcode: ${sm.barcode} · Seq: ${sm.seq} · Addr: ${sm.address}`;
+    if (sm.zip) mapText += ` · Zip: ${sm.zip}`;
+    $('#preloadSchemaMappingText').text(mapText);
+  }
+
+  // Populate Zip Code filter dropdown
+  populatePreloadZipDropdown();
+
+  // Update Scan Mode Buttons
+  setPreloadScanMode(preloadScanMode || 'verify', true);
+
+  updatePreloadMetrics();
+  renderPreloadTable();
+}
+
+function populatePreloadZipDropdown() {
+  const select = $('#preloadZipFilter');
+  if (!select.length) return;
+  select.empty();
+
+  const totalPkgs = preloadSession.packages ? preloadSession.packages.length : 0;
+  select.append(`<option value="all">All Zip Codes (${totalPkgs})</option>`);
+
+  if (!preloadSession.packages) return;
+
+  const zipCounts = {};
+  preloadSession.packages.forEach(p => {
+    const z = (p.zip || '').trim();
+    if (z) {
+      zipCounts[z] = (zipCounts[z] || 0) + 1;
+    }
+  });
+
+  const sortedZips = Object.keys(zipCounts).sort();
+  sortedZips.forEach(z => {
+    select.append(`<option value="${escapeHtml(z)}">${escapeHtml(z)} (${zipCounts[z]} pkgs)</option>`);
+  });
+
+  select.val(preloadZipFilter || 'all');
+}
+
+function setPreloadScanMode(mode, silent) {
+  preloadScanMode = mode;
+  $('#modeVerifyBtn').toggleClass('active', mode === 'verify');
+  $('#modeAssignBtn').toggleClass('active', mode === 'assign');
+  if (mode === 'assign') {
+    const nextSeq = preloadSession && preloadSession.nextAssignSeq ? preloadSession.nextAssignSeq : 1;
+    $('#preloadAssignCounterBadge').show().text(`Next: #${nextSeq}`);
+    if (!silent) showToast('Scan & Assign mode: scanning packages will assign stop numbers 1, 2, 3...', 'ok');
+  } else {
+    $('#preloadAssignCounterBadge').hide();
+    if (!silent) showToast('Verify mode: verifying packages against manifest stop numbers', '');
+  }
+}
+
+function handlePreloadZipFilterChange() {
+  preloadZipFilter = $('#preloadZipFilter').val() || 'all';
   updatePreloadMetrics();
   renderPreloadTable();
 }
 
 function updatePreloadMetrics() {
   if (!preloadSession || !preloadSession.packages) return;
-  const total = preloadSession.packages.length;
-  const scanned = preloadSession.packages.filter(p => p.status === 'prescanned').length;
+
+  const allPkgs = preloadSession.packages;
+  const targetPkgs = preloadZipFilter === 'all'
+    ? allPkgs
+    : allPkgs.filter(p => (p.zip || '').trim() === preloadZipFilter);
+
+  const total = targetPkgs.length;
+  const scanned = targetPkgs.filter(p => p.status === 'prescanned').length;
   const pending = total - scanned;
   const percent = total > 0 ? Math.round((scanned / total) * 100) : 0;
 
@@ -1072,12 +1450,10 @@ function updatePreloadMetrics() {
   $('#preloadProgressFill').css('width', percent + '%');
   $('#preloadProgressFraction').text(`${scanned} / ${total}`);
 
-  // Update sync indicator
   const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   $('#syncStateText').text('Synced ' + timeNow);
 
-  // If last scanned item exists, keep display updated
-  const lastScannedPkg = [...preloadSession.packages]
+  const lastScannedPkg = [...targetPkgs]
     .filter(p => p.status === 'prescanned' && p.scannedAt)
     .sort((a, b) => b.scannedAt - a.scannedAt)[0];
 
@@ -1157,6 +1533,11 @@ function renderPreloadTable() {
   tbody.empty();
 
   let filtered = preloadSession.packages.filter(pkg => {
+    // Zip filter
+    if (preloadZipFilter !== 'all') {
+      if ((pkg.zip || '').trim() !== preloadZipFilter) return false;
+    }
+
     // Status filter
     if (preloadStatusFilter === 'pending' && pkg.status !== 'pending') return false;
     if (preloadStatusFilter === 'prescanned' && pkg.status !== 'prescanned') return false;
@@ -1166,12 +1547,15 @@ function renderPreloadTable() {
       const matchSeq = String(pkg.seq).toLowerCase().includes(searchTerm);
       const matchBarcode = pkg.barcode.toLowerCase().includes(searchTerm);
       const matchAddr = pkg.address.toLowerCase().includes(searchTerm);
-      if (!matchSeq && !matchBarcode && !matchAddr) return false;
+      const matchZip = (pkg.zip || '').toLowerCase().includes(searchTerm);
+      const matchRecip = (pkg.recipient || '').toLowerCase().includes(searchTerm);
+      if (!matchSeq && !matchBarcode && !matchAddr && !matchZip && !matchRecip) return false;
     }
     return true;
   });
 
-  $('#preloadShowingCount').text(`Showing ${filtered.length} of ${preloadSession.packages.length} packages`);
+  const zipLabel = preloadZipFilter !== 'all' ? ` in Zip ${preloadZipFilter}` : '';
+  $('#preloadShowingCount').text(`Showing ${filtered.length} of ${preloadSession.packages.length} packages${zipLabel}`);
 
   if (!filtered.length) {
     tbody.html('<tr><td colspan="5" class="text-center py-4 text-muted">No packages match the current filter</td></tr>');
@@ -1189,11 +1573,14 @@ function renderPreloadTable() {
       ? `<button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:.78rem;" onclick="togglePreloadManualPackageStatus('${pkg.id}')">Undo</button>`
       : `<button class="btn btn-sm btn-outline-success py-0 px-2" style="font-size:.78rem;" onclick="togglePreloadManualPackageStatus('${pkg.id}')">Mark</button>`;
 
+    const seqDisplay = (pkg.seq === '?' || pkg.seq === '0') ? `<span class="text-muted">#--</span>` : `#${pkg.seq}`;
+    const zipBadge = pkg.zip ? `<span class="preload-zip-badge">${escapeHtml(pkg.zip)}</span>` : '';
+
     rowsHtml.push(`
       <tr class="${rowClass}" id="preload-row-${pkg.id}">
-        <td><strong class="font-monospace text-primary fs-6">#${pkg.seq}</strong></td>
-        <td><span class="font-monospace small fw-bold">${pkg.barcode}</span></td>
-        <td class="small fw-semibold text-dark">${pkg.address}</td>
+        <td><strong class="font-monospace text-primary fs-6">${seqDisplay}</strong></td>
+        <td><span class="font-monospace small fw-bold">${escapeHtml(pkg.barcode)}</span></td>
+        <td class="small fw-semibold text-dark">${escapeHtml(pkg.address)} ${zipBadge}</td>
         <td class="text-center">${badge}</td>
         <td class="text-end">${actionBtn}</td>
       </tr>
@@ -1219,14 +1606,12 @@ function handlePreloadBarcodeScan(rawCode) {
   }
 
   let code = (rawCode || '').trim();
-  const originalRawCode = code; // Save for fuzzy address matching
+  const originalRawCode = code;
 
-  // Strip pipe delimiters from 2D/QR codes
   if (code.includes('|')) {
     code = code.split('|')[0];
   }
 
-  // Complex 2D barcodes extraction
   if (code.length > 25 || code.includes('[)>')) {
     const extractMatch = code.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12}|SPX[A-Za-z0-9]+)/i);
     if (extractMatch) {
@@ -1254,7 +1639,6 @@ function handlePreloadBarcodeScan(rawCode) {
     return;
   }
 
-  // Flash camera box if active
   const scanBox = document.getElementById('preloadScanBox');
   if (scanBox) {
     scanBox.classList.remove('flash');
@@ -1262,13 +1646,38 @@ function handlePreloadBarcodeScan(rawCode) {
     scanBox.classList.add('flash');
   }
 
-  // Search package in manifest
-  const pkg = preloadSession.packages.find(p => p.barcode === code);
+  let pkg = preloadSession.packages.find(p => p.barcode === code);
+
+  // If in 'assign' mode and package not found: add it as an ad-hoc package!
+  if (!pkg && preloadScanMode === 'assign') {
+    if (!preloadSession.nextAssignSeq) preloadSession.nextAssignSeq = 1;
+    const assignedSeq = String(preloadSession.nextAssignSeq++);
+    pkg = {
+      id: 'pkg_' + (preloadSession.packages.length + 1),
+      barcode: code,
+      seq: assignedSeq,
+      address: 'Ad-hoc scanned package',
+      primaryAddr: 'Ad-hoc scanned package',
+      unit: '',
+      zip: '',
+      status: 'pending',
+      scannedAt: null,
+      origIndex: preloadSession.packages.length
+    };
+    preloadSession.packages.push(pkg);
+    $('#preloadAssignCounterBadge').text(`Next: #${preloadSession.nextAssignSeq}`);
+  }
 
   if (pkg) {
     const isAlreadyScanned = pkg.status === 'prescanned';
 
-    // Update state
+    // In 'assign' mode, assign next sequential number if not already scanned
+    if (preloadScanMode === 'assign' && !isAlreadyScanned) {
+      if (!preloadSession.nextAssignSeq) preloadSession.nextAssignSeq = 1;
+      pkg.seq = String(preloadSession.nextAssignSeq++);
+      $('#preloadAssignCounterBadge').text(`Next: #${preloadSession.nextAssignSeq}`);
+    }
+
     pkg.status = 'prescanned';
     pkg.scannedAt = Date.now();
 
@@ -1281,9 +1690,11 @@ function handlePreloadBarcodeScan(rawCode) {
         displaySeq = '~' + baseNum;
         displayAddr = 'Close to: ' + pkg.address;
       }
+    } else if (String(pkg.seq) === '0' && preloadScanMode !== 'assign') {
+      displaySeq = '#0';
+      displayAddr = (pkg.zip ? `[ZIP ${pkg.zip}] ` : '') + pkg.address;
     }
 
-    // Update prominent display box
     $('#preloadLastSeq').text(displaySeq);
     $('#preloadSeqStatus').text(isAlreadyScanned ? 'ALREADY SCANNED' : 'MATCH · SAVED');
     $('#preloadLastAddress').text(displayAddr);
@@ -1303,24 +1714,21 @@ function handlePreloadBarcodeScan(rawCode) {
     updatePreloadMetrics();
     renderPreloadTable();
 
-    // Highlight row in table if visible
     const row = $(`#preload-row-${pkg.id}`);
     if (row.length) {
       row.addClass('table-success');
       setTimeout(() => row.removeClass('table-success'), 1200);
     }
   } else {
-    // Barcode not in manifest, try fuzzy address match
+    // Fuzzy address match fallback
     let closestPkg = null;
     if (originalRawCode && originalRawCode.length >= 10) {
       const rawUpper = originalRawCode.toUpperCase();
       let bestScore = 0;
-      
+
       for (const p of preloadSession.packages) {
         if (!p.address) continue;
         const addressUpper = p.address.toUpperCase();
-        
-        // Extract street name
         const streetMatch = addressUpper.match(/^\s*\d+\s+([A-Z\s]+)/);
         let streetName = "";
         if (streetMatch && streetMatch[1]) {
@@ -1328,7 +1736,7 @@ function handlePreloadBarcodeScan(rawCode) {
         } else {
           streetName = addressUpper.replace(/\d+/g, '').trim();
         }
-        
+
         if (streetName.length >= 4 && rawUpper.includes(streetName)) {
           if (streetName.length > bestScore) {
             bestScore = streetName.length;
@@ -1522,16 +1930,22 @@ function openPreloadCompleteModal() {
 
   const scannedPkgs = preloadSession.packages.filter(p => p.status === 'prescanned');
   const pendingCount = preloadSession.packages.length - scannedPkgs.length;
+  const ratePct = preloadSession.packages.length > 0
+    ? Math.round((scannedPkgs.length / preloadSession.packages.length) * 100)
+    : 0;
 
   $('#modalScannedCount').text(scannedPkgs.length);
+  $('#modalMissingCount').text(pendingCount);
   $('#modalPendingCount').text(pendingCount);
   $('#modalTotalCount').text(preloadSession.packages.length);
+  $('#modalRatePercent').text(ratePct + '%');
   $('#preloadCompleteSummaryText').html(
-    `Pre-scanned <strong>${scannedPkgs.length}</strong> of <strong>${preloadSession.packages.length}</strong> packages (${pendingCount} excluded).`
+    `Pre-scanned <strong>${scannedPkgs.length}</strong> of <strong>${preloadSession.packages.length}</strong> packages (${pendingCount} pending).`
   );
 
-  // Scanned barcodes list for textarea
+  // Scanned barcodes list for textareas
   const lines = scannedPkgs.map(p => p.barcode);
+  $('#preloadCompleteBarcodeList').val(lines.join('\n'));
   $('#preloadScannedListTextarea').val(lines.join('\n'));
 
   // Show Bootstrap modal
@@ -1547,8 +1961,8 @@ function openPreloadCompleteModal() {
 }
 
 function copyPreloadScannedBarcodes() {
-  const text = $('#preloadScannedListTextarea').val();
-  if (!text.trim()) {
+  const text = $('#preloadCompleteBarcodeList').val() || $('#preloadScannedListTextarea').val();
+  if (!text || !text.trim()) {
     showToast('No scanned barcodes to copy', 'warn');
     return;
   }
@@ -1556,14 +1970,18 @@ function copyPreloadScannedBarcodes() {
   navigator.clipboard.writeText(text).then(() => {
     showToast('Copied scanned barcodes to clipboard', 'ok');
   }).catch(() => {
-    $('#preloadScannedListTextarea').select();
+    $('#preloadCompleteBarcodeList').select();
     showToast('Copy failed — barcodes selected for manual copy', 'err');
   });
 }
 
+function copyPreloadScannedList() {
+  copyPreloadScannedBarcodes();
+}
+
 function downloadPreloadScannedTxt() {
-  const text = $('#preloadScannedListTextarea').val();
-  if (!text.trim()) {
+  const text = $('#preloadCompleteBarcodeList').val() || $('#preloadScannedListTextarea').val();
+  if (!text || !text.trim()) {
     showToast('No scanned barcodes to download', 'warn');
     return;
   }
@@ -1579,6 +1997,127 @@ function downloadPreloadScannedTxt() {
   a.remove();
   URL.revokeObjectURL(url);
   showToast('Downloaded text list', 'ok');
+}
+
+function exportUniversalManifest(exportType) {
+  if (!preloadSession || !preloadSession.packages || !preloadSession.packages.length) {
+    showToast('No active manifest to export', 'warn');
+    return;
+  }
+
+  let pkgs = preloadSession.packages;
+  if (preloadZipFilter !== 'all') {
+    pkgs = pkgs.filter(p => (p.zip || '').trim() === preloadZipFilter);
+  }
+
+  if (exportType === 'scanned_only') {
+    pkgs = pkgs.filter(p => p.status === 'prescanned');
+    if (!pkgs.length) {
+      showToast('No scanned packages to export', 'warn');
+      return;
+    }
+  }
+
+  const stamp = new Date().toISOString().slice(0, 10);
+  const baseFilename = (preloadSession.filename || 'manifest').replace(/\.[^/.]+$/, '');
+  const zipSuffix = preloadZipFilter !== 'all' ? `_zip_${preloadZipFilter}` : '';
+
+  if (exportType === 'circuit') {
+    // Spoke / Circuit format
+    // Stop Number, Address, Address Line 2, Postal Code, Recipient Name, Recipient Phone, Package ID, Notes
+    const data = pkgs.map((p, idx) => ({
+      'Stop Number': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Address': p.primaryAddr || p.address,
+      'Address Line 2': p.unit || '',
+      'Postal Code': p.zip || '',
+      'Recipient Name': p.recipient || '',
+      'Recipient Phone': p.phone || '',
+      'Package ID': p.barcode,
+      'Notes': (p.route ? `Route: ${p.route} | ` : '') + `Status: ${p.status}`
+    }));
+    downloadExportFile(data, `${baseFilename}${zipSuffix}_circuit_${stamp}`, 'csv');
+    showToast(`Exported ${data.length} stops for Circuit / Spoke`, 'ok');
+  } else if (exportType === 'roadwarrior') {
+    // RoadWarrior format
+    // Stop Number, Street Address, Postal Code, Notes, Package ID
+    const data = pkgs.map((p, idx) => ({
+      'Stop Number': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Street Address': p.address,
+      'Postal Code': p.zip || '',
+      'Notes': [p.recipient, p.phone, p.route].filter(Boolean).join(' | '),
+      'Package ID': p.barcode
+    }));
+    downloadExportFile(data, `${baseFilename}${zipSuffix}_roadwarrior_${stamp}`, 'csv');
+    showToast(`Exported ${data.length} stops for RoadWarrior`, 'ok');
+  } else if (exportType === 'xlsx') {
+    // Full Clean XLSX
+    const data = pkgs.map((p, idx) => ({
+      'Stop #': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Barcode': p.barcode,
+      'Street Address': p.primaryAddr || p.address,
+      'Unit / Apt': p.unit || '',
+      'Zip Code': p.zip || '',
+      'City': p.city || '',
+      'State': p.state || '',
+      'Recipient Name': p.recipient || '',
+      'Phone': p.phone || '',
+      'Route': p.route || '',
+      'Weight': p.weight || '',
+      'Status': p.status,
+      'Scanned Time': p.scannedAt ? new Date(p.scannedAt).toLocaleTimeString() : ''
+    }));
+    downloadExportFile(data, `${baseFilename}${zipSuffix}_clean_${stamp}`, 'xlsx');
+    showToast(`Exported ${data.length} packages to Excel`, 'ok');
+  } else {
+    // Clean CSV or scanned_only CSV
+    const data = pkgs.map((p, idx) => ({
+      'Stop #': (p.seq && p.seq !== '?' && p.seq !== '0') ? p.seq : (idx + 1),
+      'Barcode': p.barcode,
+      'Street Address': p.primaryAddr || p.address,
+      'Unit / Apt': p.unit || '',
+      'Zip Code': p.zip || '',
+      'City': p.city || '',
+      'State': p.state || '',
+      'Recipient Name': p.recipient || '',
+      'Phone': p.phone || '',
+      'Route': p.route || '',
+      'Status': p.status,
+      'Scanned Time': p.scannedAt ? new Date(p.scannedAt).toLocaleTimeString() : ''
+    }));
+    const suffix = exportType === 'scanned_only' ? '_scanned' : '_clean';
+    downloadExportFile(data, `${baseFilename}${zipSuffix}${suffix}_${stamp}`, 'csv');
+    showToast(`Exported ${data.length} packages to CSV`, 'ok');
+  }
+}
+
+function downloadExportFile(dataRows, filename, ext) {
+  if (ext === 'xlsx' && typeof XLSX !== 'undefined') {
+    const ws = XLSX.utils.json_to_sheet(dataRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stops");
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+  } else {
+    let csv = '';
+    if (typeof Papa !== 'undefined') {
+      csv = Papa.unparse(dataRows);
+    } else {
+      if (!dataRows.length) return;
+      const headers = Object.keys(dataRows[0]);
+      csv = headers.join(',') + '\n';
+      dataRows.forEach(r => {
+        csv += headers.map(h => `"${String(r[h] || '').replace(/"/g, '""')}"`).join(',') + '\n';
+      });
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
 }
 
 function sendPreloadToBulkTask() {

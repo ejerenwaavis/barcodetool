@@ -70,24 +70,24 @@
               <label for="preloadFileInput" class="preload-dropzone mb-3 d-block text-center" id="preloadDropZone">
                 <i class="bi bi-cloud-arrow-up"></i>
                 <div class="fw-bold mb-1" style="font-size:15px;">Click to browse or drop manifest here</div>
-                <div class="small text-muted mb-2">Accepts <strong>.csv</strong> or <strong>.zip</strong> containing CSV</div>
+                <div class="small text-muted mb-2">Accepts <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, or <strong>.zip</strong> (multi-file supported)</div>
                 <div>
                   <span class="btn primary" style="padding:8px 18px; font-size:13px;">
                     <i class="bi bi-folder2-open me-1"></i>Select Manifest File
                   </span>
                 </div>
-                <input type="file" id="preloadFileInput" accept=".csv,text/csv,text/plain,.txt,.zip,application/zip,application/x-zip-compressed" style="opacity: 0; position: absolute; z-index: -1; width: 1px; height: 1px; pointer-events: none;">
+                <input type="file" id="preloadFileInput" accept=".csv,.tsv,.txt,.xls,.xlsx,.zip,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed" style="opacity: 0; position: absolute; z-index: -1; width: 1px; height: 1px; pointer-events: none;">
               </label>
 
               <!-- Quick Paste Option -->
               <div class="text-center mb-2">
                 <button class="btn-link-sub" type="button" data-bs-toggle="collapse" data-bs-target="#preloadPasteCollapse" aria-expanded="false">
-                  <i class="bi bi-clipboard2-plus me-1"></i>Or paste raw CSV text directly
+                  <i class="bi bi-clipboard2-plus me-1"></i>Or paste raw CSV / tab-delimited text directly
                 </button>
               </div>
               <div class="collapse mb-3" id="preloadPasteCollapse">
                 <div class="p-3 bg-light rounded border">
-                  <textarea id="preloadPasteText" class="form-control mono mb-2" rows="4" style="font-size:12px;" placeholder='"Barcode","Seq No","Address"&#10;"1LS722712153166","114","5520 LAUREL OAK DR. SUWANEE. GA. 30024"'></textarea>
+                  <textarea id="preloadPasteText" class="form-control mono mb-2" rows="4" style="font-size:12px;" placeholder='"Barcode","Seq No","Address" or "Tracking No" [Tab] "Sequence" [Tab] "Street Address" ...'></textarea>
                   <div class="text-end">
                     <button class="btn primary" style="padding:6px 14px; font-size:12px;" onclick="parsePastedManifest()">Load Pasted Data</button>
                   </div>
@@ -96,8 +96,11 @@
 
               <!-- Format note -->
               <div class="p-2 rounded border small text-muted" style="background:var(--paper); font-size:11.5px;">
-                <strong>Expected columns:</strong>
-                <code class="d-block mt-1 text-dark" style="font-size:10.5px;">"Barcode","Last Event","Last Event time","Last GPS location","Seq No","Address"</code>
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <strong class="text-dark"><i class="bi bi-magic me-1" style="color:var(--accent);"></i>Universal Manifest Auto-Detection:</strong>
+                  <span class="badge bg-light text-secondary border">LaserShip · SpeedX · Circuit · RoadWarrior · Generic</span>
+                </div>
+                <div>Automatically detects and normalizes <strong>Barcode / Tracking</strong>, <strong>Sequence / Stop #</strong>, <strong>Address</strong>, <strong>Unit / Apt</strong>, and <strong>Zip Code</strong> from any CSV, Excel (.xlsx/.xls), or ZIP. Serial numbers and row indices are automatically excluded.</div>
               </div>
             </div>
           </div>
@@ -113,6 +116,17 @@
                   <div class="manifest-sub" id="preloadSessionTime">Loaded Just Now</div>
                 </div>
                 <div class="chip active" id="preloadSessionChip">ACTIVE</div>
+              </div>
+
+              <!-- Schema & Courier Auto-Detection Badges -->
+              <div class="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top" id="preloadSchemaInfoRow">
+                <span class="badge bg-primary" id="preloadCourierBadge" style="font-size:11px;">Manifest Loaded</span>
+                <span class="badge bg-warning text-dark d-none" id="preloadUnsequencedBadge" style="font-size:11px;">
+                  <i class="bi bi-exclamation-triangle-fill me-1"></i>UNSEQUENCED BATCH
+                </span>
+                <span class="small text-muted" id="preloadSchemaMappingText" style="font-size:11px;">
+                  Auto-mapped headers
+                </span>
               </div>
 
               <div class="stat-strip">
@@ -142,6 +156,40 @@
 
             <!-- Active Scan & Box Numbering Console Panel -->
             <div class="panel preload-console-panel">
+              <!-- Warehouse Sorting Mode & Zip Filter Strip -->
+              <div class="preload-control-strip mb-2 p-2 rounded border" style="background:var(--paper);">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <!-- Scan Mode Selector -->
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="small fw-bold text-muted" style="font-size:11.5px;">
+                      <i class="bi bi-sliders me-1"></i>Scan Mode:
+                    </span>
+                    <div class="btn-group btn-group-sm" id="preloadScanModeGroup">
+                      <button type="button" class="btn btn-outline-secondary active py-0 px-2" style="font-size:11px;" id="modeVerifyBtn" onclick="setPreloadScanMode('verify')" title="Verify against sequence numbers in manifest">
+                        <i class="bi bi-check2-circle me-1"></i>Verify Manifest
+                      </button>
+                      <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:11px;" id="modeAssignBtn" onclick="setPreloadScanMode('assign')" title="Assign sequential stop numbers (1, 2, 3...) as packages are scanned">
+                        <i class="bi bi-sort-numeric-down me-1"></i>Scan &amp; Assign Seq
+                      </button>
+                    </div>
+                    <span class="badge bg-light text-muted border" id="preloadAssignCounterBadge" style="font-size:10px; display:none;">Next: #1</span>
+                  </div>
+
+                  <!-- Zip Code Filter -->
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small" style="font-size:11.5px;">Zip Code:</span>
+                    <select id="preloadZipFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadZipFilterChange()">
+                      <option value="all">All Zip Codes</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Unsequenced batch notice -->
+                <div id="preloadUnsequencedNotice" class="small text-warning mt-1 pt-1 border-top d-none" style="font-size:11px;">
+                  <i class="bi bi-exclamation-circle-fill me-1"></i>Unsequenced batch detected (e.g. SpeedX all 0s). Use <strong>Scan &amp; Assign Seq</strong> to number boxes sequentially as you scan, or filter by Zip Code.
+                </div>
+              </div>
+
               <!-- TOP ROW: Large Display on Left + Compact Rectangular Camera Viewfinder on Right -->
               <div class="preload-top-scanner-grid mb-2">
                 
@@ -261,6 +309,7 @@
                         <th style="width:65px;">Seq #</th>
                         <th>Barcode</th>
                         <th>Address</th>
+                        <th style="width:95px; text-align:center;">Status</th>
                         <th style="width:75px; text-align:right;">Action</th>
                       </tr>
                     </thead>
@@ -271,9 +320,26 @@
             </div>
 
             <!-- Bottom Action Bar for Preload -->
-            <div class="actionbar">
+            <div class="actionbar d-flex justify-content-between align-items-center gap-2">
               <div class="btn ghost" onclick="confirmResetPreload(false)">New manifest</div>
-              <div class="btn primary" id="preloadCompleteBtn" onclick="openPreloadCompleteModal()">Complete preload</div>
+              <div class="d-flex gap-2">
+                <div class="dropdown">
+                  <button class="btn ghost dropdown-toggle" type="button" id="preloadExportMenuBtn" data-bs-toggle="dropdown" aria-expanded="false" style="padding:10px 14px; font-size:13px;">
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Export
+                  </button>
+                  <ul class="dropdown-menu dropdown-menu-end shadow border" aria-labelledby="preloadExportMenuBtn" style="font-size:12.5px; min-width:240px;">
+                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Route Planning Services</h6></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('circuit')"><i class="bi bi-signpost-split me-2 text-primary"></i>Export for Spoke / Circuit (CSV)</a></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('roadwarrior')"><i class="bi bi-compass me-2 text-danger"></i>Export for RoadWarrior (CSV)</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header text-uppercase fw-bold text-muted" style="font-size:10.5px;">Warehouse Manifest Files</h6></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('xlsx')"><i class="bi bi-file-earmark-excel me-2 text-success"></i>Download Full Manifest (XLSX)</a></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('csv')"><i class="bi bi-filetype-csv me-2 text-secondary"></i>Download Clean Manifest (CSV)</a></li>
+                    <li><a class="dropdown-item py-2" href="javascript:void(0)" onclick="exportUniversalManifest('scanned_only')"><i class="bi bi-check2-all me-2 text-info"></i>Export Scanned Only (CSV)</a></li>
+                  </ul>
+                </div>
+                <div class="btn primary" id="preloadCompleteBtn" onclick="openPreloadCompleteModal()">Complete preload</div>
+              </div>
             </div>
 
           </div>
@@ -581,6 +647,24 @@
               </div>
             </div>
 
+            <!-- Universal Route & Manifest Exports -->
+            <div class="mb-3 p-2 bg-light rounded border">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold text-muted" style="font-size:11px;">Export To Routing / Box Services:</span>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportUniversalManifest('circuit')">
+                  <i class="bi bi-signpost-split me-1"></i>Spoke / Circuit (CSV)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="exportUniversalManifest('roadwarrior')">
+                  <i class="bi bi-compass me-1"></i>RoadWarrior (CSV)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="exportUniversalManifest('xlsx')">
+                  <i class="bi bi-file-earmark-excel me-1"></i>Clean XLSX
+                </button>
+              </div>
+            </div>
+
             <div class="mb-3">
               <div class="d-flex justify-content-between align-items-center mb-1">
                 <label class="small fw-bold text-muted mb-0">Pre-scanned Barcodes List</label>
@@ -700,7 +784,7 @@
             <!-- BOTTOM THUMB-FRIENDLY ACTION BAR (No hand stretching!) -->
             <div class="d-flex align-items-center justify-content-between gap-2 mt-3" id="ocrActionRow">
               <!-- Left: Gallery Upload Icon -->
-              <label class="btn ghost btn-icon-round mb-0" title="Upload from Photo Gallery" style="cursor:pointer;">
+              <label class="btn ghost ocr-side-btn mb-0" title="Upload from Photo Gallery" style="cursor:pointer;">
                 <i class="bi bi-image"></i>
                 <input type="file" accept="image/*" id="ocrUploadFallbackInput" class="d-none" onchange="handleOcrImageUpload(event)">
               </label>
@@ -712,7 +796,7 @@
               </button>
 
               <!-- Right: Torch / Flashlight Toggle Button -->
-              <button type="button" class="btn ghost btn-icon-round mb-0" id="ocrTorchBtn" onclick="toggleOcrTorch()" title="Toggle Flashlight" style="display:none;">
+              <button type="button" class="btn ghost ocr-side-btn mb-0" id="ocrTorchBtn" onclick="toggleOcrTorch()" title="Toggle Flashlight" style="display:none;">
                 <i class="bi bi-lightning-charge"></i>
               </button>
             </div>
