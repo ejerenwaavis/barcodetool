@@ -1324,12 +1324,19 @@ body {
 
 /* Flush Top-Docked Status Strip & Team Sorting Badges */
 .preload-status-strip {
-  background: var(--paper);
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
   padding: 8px 14px;
-  position: sticky;
-  top: 44px;
-  z-index: 20;
+  margin: -16px -14px 10px -14px;
+  position: relative;
+  z-index: 5;
+}
+
+@media (max-width: 640px) {
+  .preload-status-strip {
+    padding: 7px 12px;
+    margin: -16px -14px 10px -14px;
+  }
 }
 
 .driver-route-badge {

@@ -1639,9 +1639,9 @@ function renderPreloadSessionUI() {
 
   // 1. Update Flush Slim Status Strip
   const routeCount = preloadSession.routes ? preloadSession.routes.length : 1;
-  const poolBadgeText = routeCount > 1 ? `Team Pool (${routeCount} Drivers)` : (preloadSession.routes && preloadSession.routes[0] ? preloadSession.routes[0].fullLabel : 'Active Manifest');
+  const poolBadgeText = routeCount > 1 ? `Team Pool (${routeCount})` : (preloadSession.routes && preloadSession.routes[0] ? preloadSession.routes[0].fullLabel : 'Active Route');
   $('#preloadPoolBadge').text(poolBadgeText);
-  $('#preloadSessionMiniInfo').text(`${total} Total • ${scanned} Scanned • ${pending} Pending`);
+  $('#preloadSessionMiniInfo').html(`<strong class="text-dark">${total}</strong> total · <strong class="text-success">${scanned}</strong> scan`);
 
   // 2. Update Collapsible Detailed Summary
   $('#preloadSessionFilename').text(preloadSession.filename || 'Manifest');
@@ -1814,7 +1814,7 @@ function updatePreloadMetrics() {
   const allTotal = preloadSession.packages.length;
   const allScanned = preloadSession.packages.filter(p => p.status === 'prescanned').length;
   const allPending = allTotal - allScanned;
-  $('#preloadSessionMiniInfo').text(`${allTotal} Total • ${allScanned} Scanned • ${allPending} Pending`);
+  $('#preloadSessionMiniInfo').html(`<strong class="text-dark">${allTotal}</strong> total · <strong class="text-success">${allScanned}</strong> scan`);
 
   const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   $('#syncStateText').text('Synced ' + timeNow);

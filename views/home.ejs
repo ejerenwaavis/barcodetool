@@ -109,19 +109,19 @@
           <div id="preloadActiveSection" style="display:none;">
 
             <!-- 1. FLUSH SLIM STATUS STRIP -->
-            <div class="preload-status-strip px-3 py-2 d-flex align-items-center justify-content-between border-bottom" id="preloadStatusStrip">
-              <div class="d-flex align-items-center gap-2 text-truncate me-2">
-                <span class="badge bg-primary" id="preloadPoolBadge" style="font-size:11px; font-weight:700;">Active Pool</span>
-                <span class="fw-bold text-dark text-truncate" id="preloadSessionMiniInfo" style="font-size:12px;">0 Total • 0 Scanned • 0 Pending</span>
+            <div class="preload-status-strip px-3 py-1.5 d-flex align-items-center justify-content-between border-bottom" id="preloadStatusStrip">
+              <div class="d-flex align-items-center gap-2 overflow-hidden me-1">
+                <span class="badge bg-primary text-truncate" id="preloadPoolBadge" style="font-size:11px; font-weight:700; max-width: 140px;">Active Pool</span>
+                <span class="fw-semibold text-muted text-truncate" id="preloadSessionMiniInfo" style="font-size:11.5px;"><strong class="text-dark">0</strong> total · <strong class="text-success">0</strong> scan</span>
               </div>
               <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" type="button" onclick="openAddDriverModal()" title="Add another driver manifest to pool">
-                  <i class="bi bi-person-plus-fill me-1"></i>+ Driver
+                <button class="btn btn-sm btn-outline-primary py-0 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11px; height:26px;" type="button" onclick="openAddDriverModal()" title="Add Driver to pool">
+                  <i class="bi bi-person-plus-fill me-1"></i>+Driver
                 </button>
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" type="button" onclick="openSplitManifestModal()" title="Split manifest across multiple drivers">
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11px; height:26px;" type="button" onclick="openSplitManifestModal()" title="Split manifest">
                   <i class="bi bi-diagram-3-fill me-1"></i>Split
                 </button>
-                <button class="btn btn-sm btn-link p-0 text-muted ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#preloadSummaryDetailsCollapse" title="Toggle detailed stats">
+                <button class="btn btn-sm btn-link p-0 text-muted ms-1" type="button" data-bs-toggle="collapse" data-bs-target="#preloadSummaryDetailsCollapse" title="Toggle stats">
                   <i class="bi bi-chevron-down" id="preloadSummaryToggleIcon"></i>
                 </button>
               </div>
@@ -210,36 +210,47 @@
 
               <!-- Team Filter & Warehouse Sorting Controls -->
               <div class="preload-control-strip mb-2 p-2 rounded border" style="background:var(--paper);">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                  <!-- Mode Selector -->
-                  <div class="d-flex align-items-center gap-2">
-                    <span class="small fw-bold text-muted" style="font-size:11px;">
+                <!-- Top Row: Mode Selector + Camera Quick Toggle -->
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2 pb-1 border-bottom">
+                  <div class="d-flex align-items-center gap-1">
+                    <span class="small fw-bold text-muted me-1" style="font-size:11px;">
                       <i class="bi bi-sliders me-1"></i>Mode:
                     </span>
                     <div class="btn-group btn-group-sm" id="preloadScanModeGroup">
-                      <button type="button" class="btn btn-outline-secondary active py-0 px-2" style="font-size:11px;" id="modeVerifyBtn" onclick="setPreloadScanMode('verify')" title="Verify against sequence numbers in manifest">
+                      <button type="button" class="btn btn-outline-secondary active py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" id="modeVerifyBtn" onclick="setPreloadScanMode('verify')" title="Verify against sequence numbers in manifest">
                         Verify
                       </button>
-                      <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size:11px;" id="modeAssignBtn" onclick="setPreloadScanMode('assign')" title="Assign sequential stop numbers (1, 2, 3...) as packages are scanned">
+                      <button type="button" class="btn btn-outline-secondary py-0 px-2 fw-semibold" style="font-size:11px; height:26px;" id="modeAssignBtn" onclick="setPreloadScanMode('assign')" title="Assign sequential stop numbers (1, 2, 3...) as packages are scanned">
                         Assign Seq
                       </button>
                     </div>
-                    <span class="badge bg-light text-muted border" id="preloadAssignCounterBadge" style="font-size:10px; display:none;">Next: #1</span>
+                    <span class="badge bg-light text-muted border ms-1" id="preloadAssignCounterBadge" style="font-size:10px; display:none;">Next: #1</span>
                   </div>
 
-                  <!-- Driver / Route Filter -->
-                  <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small" style="font-size:11px;">Driver:</span>
-                    <select id="preloadDriverFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadDriverFilterChange()">
+                  <button class="btn btn-sm btn-outline-secondary py-0 px-2 d-inline-flex align-items-center gap-1 fw-semibold" style="font-size:11px; height:26px;" type="button" id="preloadCamAltToggle" onclick="togglePreloadCamera()" title="Toggle Camera Scanner">
+                    <i class="bi bi-camera"></i><span id="preloadCamBtnText">Camera</span>
+                  </button>
+                </div>
+
+                <!-- Bottom Row: Clean 3-Column Dropdown Filter Grid (Driver, Zip, Carrier) -->
+                <div class="row g-1 align-items-center">
+                  <div class="col-4">
+                    <select id="preloadDriverFilter" class="form-select form-select-sm py-0 px-1 text-truncate" style="font-size:10.5px; height:26px;" onchange="handlePreloadDriverFilterChange()" title="Filter by Driver">
                       <option value="all">All Drivers</option>
                     </select>
                   </div>
-
-                  <!-- Zip Code Filter -->
-                  <div class="d-flex align-items-center gap-1">
-                    <span class="text-muted small" style="font-size:11px;">Zip:</span>
-                    <select id="preloadZipFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;" onchange="handlePreloadZipFilterChange()">
+                  <div class="col-4">
+                    <select id="preloadZipFilter" class="form-select form-select-sm py-0 px-1 text-truncate" style="font-size:10.5px; height:26px;" onchange="handlePreloadZipFilterChange()" title="Filter by Zip Code">
                       <option value="all">All Zips</option>
+                    </select>
+                  </div>
+                  <div class="col-4">
+                    <select id="preloadCarrierFilter" class="form-select form-select-sm py-0 px-1 text-truncate" style="font-size:10.5px; height:26px;" title="Filter Carrier">
+                      <option value="general">All Carriers</option>
+                      <option value="ontrac">LaserShip</option>
+                      <option value="speedx">SpeedX</option>
+                      <option value="gopro">GoPro</option>
+                      <option value="any">Any Carrier</option>
                     </select>
                   </div>
                 </div>
@@ -247,23 +258,6 @@
                 <!-- Unsequenced batch notice -->
                 <div id="preloadUnsequencedNotice" class="small text-warning mt-1 pt-1 border-top d-none" style="font-size:11px;">
                   <i class="bi bi-exclamation-circle-fill me-1"></i>Unsequenced batch detected (e.g. SpeedX all 0s). Use <strong>Assign Seq</strong> to number boxes sequentially as you scan, or filter by Zip Code.
-                </div>
-              </div>
-
-              <!-- Carrier Filter and Quick Action Row -->
-              <div class="d-flex justify-content-between align-items-center px-1">
-                <button class="btn-link-sub" type="button" id="preloadCamAltToggle" onclick="togglePreloadCamera()">
-                  <i class="bi bi-camera me-1"></i><span id="preloadCamBtnText">Turn Camera On</span>
-                </button>
-                <div class="d-flex align-items-center gap-1">
-                  <span class="text-muted" style="font-size:11px;">Carrier:</span>
-                  <select id="preloadCarrierFilter" class="form-select form-select-sm w-auto py-0 px-2" style="font-size:11px; height:26px;">
-                    <option value="general">All Supported Carriers</option>
-                    <option value="ontrac">OnTrac / LaserShip</option>
-                    <option value="speedx">SpeedX</option>
-                    <option value="gopro">GoPro</option>
-                    <option value="any">Allow Any</option>
-                  </select>
                 </div>
               </div>
 
