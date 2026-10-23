@@ -1,4 +1,4 @@
-﻿---
+---
 name: deploy-barcodetool
 description: Step-by-step deployment workflow for the barcodetool project, including pre-flight checks, local builds, git push, and Namecheap remote restart via ssh aceddivision.
 ---
@@ -22,6 +22,6 @@ Follow these exact steps in order when the user asks you to deploy or run the bu
    - Run `git push origin main`.
 4. **Deploy to Namecheap**:
    - Run SSH command to pull and restart the app on the remote server via configured `aceddivision` SSH alias:
-     `ssh -o BatchMode=yes aceddivision 'source /home/acedzagz/nodevenv/barcodetool/10/bin/activate && cd /home/acedzagz/barcodetool && CHANGED=$(git diff --name-only HEAD origin/main | grep -E "package(-lock)?\.json") && git pull origin main && if [ -n "$CHANGED" ]; then echo "Dependencies changed, running npm ci..."; npm ci --omit=dev; fi && touch tmp/restart.txt'`
+     `ssh -o BatchMode=yes aceddivision 'source /home/acedzagz/nodevenv/barcodetool/22/bin/activate && cd /home/acedzagz/barcodetool && CHANGED=$(git diff --name-only HEAD origin/main | grep -E "package(-lock)?\.json") && git pull origin main && if [ -n "$CHANGED" ]; then echo "Dependencies changed, running npm ci..."; npm ci --omit=dev; fi && touch tmp/restart.txt'`
 5. **Verify**:
    - Confirm to the user that the app has been safely checked, built, pushed, and restarted remotely on Namecheap.
