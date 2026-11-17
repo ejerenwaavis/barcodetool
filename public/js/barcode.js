@@ -92,6 +92,9 @@ function switchToTab(tabId) {
   if (typeof genScanning !== 'undefined' && genScanning && !tabId.includes('generate')) {
     closeGenerateScanner();
   }
+  if (typeof outageScanning !== 'undefined' && outageScanning && !tabId.includes('preload-scan')) {
+    stopOutageCamera();
+  }
   const cleanId = tabId.replace('-tab', '');
 
   if (cleanId === 'qrcode') {
@@ -3370,7 +3373,7 @@ let outageDetector = null;
 let outageZxingReader = null;
 let outageLastCode = '';
 let outageLastCodeTime = 0;
-const OUTAGE_REPEAT_WINDOW = 1800;
+const OUTAGE_REPEAT_WINDOW = 1500; // 1.5-second cooldown
 let outageTapOrderActive = false;
 let outageTapNextSeq = 1;
 let outageOcrProcessing = false;
@@ -3425,6 +3428,28 @@ function saveOutageSession() {
   }
 }
 
+function setOutageScannerStatus(isScanning) {
+  const badge = $('#outageStatusBadge');
+  const nextSeq = (outageSession && outageSession.packages) ? outageSession.packages.length + 1 : 1;
+  $('#outageLatestSeqDisplay').text('#' + nextSeq);
+
+  if (isScanning) {
+    badge.removeClass('bg-light text-muted border')
+         .addClass('bg-success text-white outage-scanning-pulse')
+         .html('<span class="spinner-grow spinner-grow-sm me-1" style="width:7px; height:7px;" role="status"></span>SCANNING');
+    $('#outageCamStatusText').text('Scanning active — align 1D Barcode or 2D QR in frame');
+    $('#outageCamPlaceholder').hide();
+    $('#outageCamWrap').show();
+  } else {
+    badge.removeClass('bg-success text-white outage-scanning-pulse')
+         .addClass('bg-light text-muted border')
+         .text('STANDBY');
+    $('#outageCamStatusText').text('Camera stopped');
+    $('#outageCamWrap').hide();
+    $('#outageCamPlaceholder').show();
+  }
+}
+
 function updateOutageMetrics() {
   const total = (outageSession && outageSession.packages) ? outageSession.packages.length : 0;
   
@@ -3439,13 +3464,17 @@ function updateOutageMetrics() {
 
   $('#outagePkgCount').text(total);
   $('#outageStopCount').text(uniqueStops.size);
+  const nextSeq = total + 1;
+  $('#outageLatestSeqDisplay').text('#' + nextSeq);
 
   if (total > 0) {
     $('#outageModeBadge').text(total).show();
     $('#outageResumeDetails').text(`${total} package(s) ready in intake`);
+    $('#outageActionsContainer').show();
   } else {
     $('#outageModeBadge').hide();
     $('#outageResumeBanner').addClass('d-none').removeClass('d-flex');
+    $('#outageActionsContainer').hide();
   }
 }
 
@@ -3454,9 +3483,13 @@ function switchManifestMode(mode) {
     $('#manifestModeUploadBtn').removeClass('active');
     $('#manifestModeOutageBtn').addClass('active');
     $('#preloadUploadCard').hide();
+    $('#preloadResumeBanner').hide();
+    $('#outageResumeBanner').hide();
     $('#outageIntakeCard').show();
     renderOutageTable();
     updateOutageMetrics();
+    const mainEl = document.querySelector('.main');
+    if (mainEl) mainEl.scrollTop = 0;
   } else {
     $('#manifestModeOutageBtn').removeClass('active');
     $('#manifestModeUploadBtn').addClass('active');
@@ -3465,6 +3498,8 @@ function switchManifestMode(mode) {
     if (outageScanning) {
       stopOutageCamera();
     }
+    checkPreloadStorage();
+    checkOutageStorage();
   }
 }
 

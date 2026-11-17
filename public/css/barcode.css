@@ -1614,3 +1614,189 @@ body {
   border: 2px solid #f59e0b !important;
   box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2) !important;
 }
+
+
+/* ==========================================================================
+   Outage Intake Modern Viewfinder & Overlap Fixes
+   ========================================================================== */
+
+/* Wide Full-Card-Width Outage Camera Viewfinder (height: 155px–165px) */
+.outage-viewfinder-card {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  background: var(--ink-900);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--accent);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(10, 20, 32, 0.15);
+}
+
+.outage-cam-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #ffffff 0%, #fffdf0 100%);
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+  padding: 12px;
+  text-align: center;
+}
+
+.outage-cam-placeholder:hover,
+.outage-cam-placeholder:active {
+  background: #fef3c7;
+}
+
+.outage-cam-placeholder-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d97706;
+  font-size: 20px;
+}
+
+.outage-cam-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000000;
+  overflow: hidden;
+}
+
+.outage-cam-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.outage-scan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.outage-scan-reticle {
+  position: relative;
+  width: 86%;
+  max-width: 480px;
+  height: 110px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.42);
+  transition: border-color .2s ease;
+}
+
+.outage-scan-reticle.flash {
+  border-color: #10B981 !important;
+  box-shadow: 0 0 0 9999px rgba(16, 185, 129, 0.25) !important;
+}
+
+.outage-reticle-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: #F59E0B;
+  border-style: solid;
+}
+.outage-reticle-corner.tl { top: -1px; left: -1px; border-width: 3px 0 0 3px; border-top-left-radius: 6px; }
+.outage-reticle-corner.tr { top: -1px; right: -1px; border-width: 3px 3px 0 0; border-top-right-radius: 6px; }
+.outage-reticle-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 3px 3px; border-bottom-left-radius: 6px; }
+.outage-reticle-corner.br { bottom: -1px; right: -1px; border-width: 0 3px 3px 0; border-bottom-right-radius: 6px; }
+
+.outage-scan-line {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #F59E0B, #FDE68A, #F59E0B, transparent);
+  box-shadow: 0 0 8px #F59E0B;
+  animation: outageLaserMove 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+@keyframes outageLaserMove {
+  0% { top: 12%; }
+  100% { top: 88%; }
+}
+
+.outage-cam-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, transparent 100%);
+  z-index: 3;
+}
+
+.outage-scanning-pulse {
+  animation: outageScanningAnim 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes outageScanningAnim {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+  100% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+}
+
+/* Scoped Scanned Packages Intake Table Container (Safe normal document flow) */
+.outage-table-container {
+  max-height: 440px;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 20px;
+}
+
+.outage-table-container thead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #F9FAFB;
+}
+
+.outage-table-container thead th {
+  position: sticky;
+  top: 0;
+  background: #F9FAFB;
+  box-shadow: inset 0 -1px 0 var(--line);
+  padding: 8px 10px;
+  z-index: 5;
+}
+
+/* Ensure navbar always floats above all page content with high z-index */
+.navbar {
+  z-index: 50 !important;
+}
+
+/* Add generous safe bottom padding so table and content scroll fully above bottom navbar */
+.app-shell {
+  padding-bottom: 110px !important;
+}
+
+.main {
+  padding-bottom: 110px !important;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding-bottom: 110px !important;
+  }
+  .main {
+    padding-bottom: 110px !important;
+  }
+}
