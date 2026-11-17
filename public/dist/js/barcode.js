@@ -21,6 +21,7 @@ function drawCanvasLabel(canvasSelector, label, x, y, font) {
   ctx.clearRect(0, 0, canvas.width, 48);
   ctx.font = font;
   ctx.textAlign = "center";
+  ctx.fillStyle = "#000000";
   ctx.fillText(label, x, y);
 }
 
@@ -88,6 +89,9 @@ function switchToGenerateMode(mode) {
 
 function switchToTab(tabId) {
   if (!tabId) return;
+  if (typeof genScanning !== 'undefined' && genScanning && !tabId.includes('generate')) {
+    closeGenerateScanner();
+  }
   const cleanId = tabId.replace('-tab', '');
 
   if (cleanId === 'qrcode') {
@@ -152,19 +156,29 @@ function render(){
             JsBarcode("#barcode", text, {
               width:(text.length > 14)? 2 : 2.4,
               font: "Arial",
-              marginTop: 50,
+              marginTop: 45,
+              marginBottom: 15,
+              marginLeft: 20,
+              marginRight: 20,
+              background: "#FFFFFF",
+              lineColor: "#000000",
               height:120,
               displayValue: true
             });
 
             $("#barcodeBrand").val(brand);
-            drawCanvasLabel("#barcode", brand, -100, 42, "16px Arial");
+            drawCanvasLabel("#barcode", brand, -100, 36, "16px Arial");
             
         }else{
           JsBarcode("#barcode", text, {
               width:(text.length > 14)? 2 : 2.4,
               font: "Arial",
-              marginTop: 50,
+              marginTop: 35,
+              marginBottom: 15,
+              marginLeft: 20,
+              marginRight: 20,
+              background: "#FFFFFF",
+              lineColor: "#000000",
               height:120,
               displayValue: true
           });
@@ -177,7 +191,8 @@ function render(){
     $("#printButton").addClass("disabled");
     JsBarcode("#barcode", " ", {
       width: 1.4,
-      lineColor: "#000",
+      background: "#FFFFFF",
+      lineColor: "#000000",
       height:25,
       displayValue: false
     });
@@ -357,8 +372,13 @@ function renderModal(){
     JsBarcode("#barcodeModal", text, {
       font: "Arial",
       width:(text.length > 18)? 1.4 : 1.7,
-      marginTop: 50,
-      height:100,
+      marginTop: 45,
+      marginBottom: 15,
+      marginLeft: 20,
+      marginRight: 20,
+      background: "#FFFFFF",
+      lineColor: "#000000",
+      height: 100,
       displayValue: true
     });
     // if(text.length > 6){
@@ -4464,5 +4484,216 @@ function deleteOutagePackage(pkgId) {
     saveOutageSession();
     renderOutageTable();
     showToast('Package removed from intake', '');
+  }
+}
+
+
+// ==========================================================================
+// Generate Tab: Scan-to-Regenerate Fast Camera Barcode Decoder
+// ==========================================================================
+
+let genScanning = false;
+let genStream = null;
+let genDetector = null;
+let genZxingReader = null;
+let currentGenScanTarget = 'barcodeNumber';
+let genLastDecoded = '';
+let genLastDecodedTime = 0;
+let genTorchActive = false;
+
+async function openGenerateScanner(targetInputId) {
+  currentGenScanTarget = targetInputId || 'barcodeNumber';
+  genLastDecoded = '';
+  genLastDecodedTime = 0;
+  genTorchActive = false;
+  $('#genTorchBtn i').attr('class', 'bi bi-lightbulb');
+
+  // Resume Web Audio if suspended
+  getPreloadAudioContext();
+
+  // Slide down inline camera
+  $('#generateScannerInline').slideDown(180, function() {
+    const el = document.getElementById('generateScannerInline');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  const video = document.getElementById('generateVideo');
+  const statusSpan = $('#generateScannerStatus');
+  statusSpan.text('Initializing camera...');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusSpan.text('Camera access not supported on this browser.');
+    showToast('Camera access not supported on this browser', 'err');
+    return;
+  }
+
+  try {
+    genStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+    video.srcObject = genStream;
+    await video.play();
+
+    // Check torch support
+    const track = genStream.getVideoTracks()[0];
+    if (track && track.getCapabilities && track.getCapabilities().torch) {
+      $('#genTorchBtn').show();
+    } else {
+      $('#genTorchBtn').hide();
+    }
+  } catch (err) {
+    statusSpan.text('Camera error: ' + (err.message || err.name));
+    showToast('Camera permission denied or camera failed', 'err');
+    return;
+  }
+
+  // Multi-symbology decoder setup: QR, Code 128, DataMatrix, PDF417, Aztec, Code 39, Code 93, EAN 13, UPC A
+  const FORMATS = ['code_128', 'code_39', 'code_93', 'ean_13', 'upc_a', 'qr_code', 'pdf417', 'data_matrix', 'aztec'];
+  if ('BarcodeDetector' in window) {
+    try {
+      genDetector = new BarcodeDetector({ formats: FORMATS });
+    } catch (e) {
+      genDetector = new BarcodeDetector();
+    }
+  } else if (typeof ZXing !== 'undefined') {
+    try {
+      genZxingReader = new ZXing.BrowserMultiFormatReader();
+    } catch (e) {
+      console.warn('ZXing init error:', e);
+    }
+  }
+
+  genScanning = true;
+  statusSpan.text('Point lens at 1D Barcode or 2D QR Code...');
+
+  if (genZxingReader) {
+    genZxingReader.decodeFromVideoElement(video, (result, err) => {
+      if (!genScanning) return;
+      if (result && result.getText()) {
+        const text = result.getText();
+        let fmtName = '';
+        try {
+          const rawFmt = result.getBarcodeFormat();
+          fmtName = (rawFmt !== undefined && rawFmt !== null) ? String(rawFmt) : '';
+        } catch (e) {}
+        handleGenerateScanResult(text, fmtName);
+      }
+    });
+  } else {
+    loopGenerateCamera();
+  }
+}
+
+async function loopGenerateCamera() {
+  if (!genScanning) return;
+  const video = document.getElementById('generateVideo');
+
+  if (genDetector && video && video.readyState >= 2) {
+    try {
+      const codes = await genDetector.detect(video);
+      if (codes && codes.length) {
+        for (const c of codes) {
+          if (c.rawValue) {
+            handleGenerateScanResult(c.rawValue, c.format || '');
+            return;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (genScanning) {
+    requestAnimationFrame(loopGenerateCamera);
+  }
+}
+
+function closeGenerateScanner() {
+  genScanning = false;
+  if (genZxingReader) {
+    try { genZxingReader.reset(); } catch (e) {}
+    genZxingReader = null;
+  }
+  if (genStream) {
+    genStream.getTracks().forEach(t => t.stop());
+    genStream = null;
+  }
+  const video = document.getElementById('generateVideo');
+  if (video) video.srcObject = null;
+  $('#generateScannerInline').slideUp(180);
+}
+
+async function toggleGenTorch() {
+  if (!genStream) return;
+  const track = genStream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch) {
+      genTorchActive = !genTorchActive;
+      await track.applyConstraints({ advanced: [{ torch: genTorchActive }] });
+      $('#genTorchBtn i').attr('class', genTorchActive ? 'bi bi-lightbulb-fill text-warning' : 'bi bi-lightbulb');
+    }
+  } catch (e) {}
+}
+
+function handleGenerateScanResult(rawCode, format) {
+  if (!rawCode || !genScanning) return;
+  const now = Date.now();
+  if (rawCode === genLastDecoded && (now - genLastDecodedTime) < 2000) {
+    return;
+  }
+  genLastDecoded = rawCode;
+  genLastDecodedTime = now;
+
+  // 1. Audio Confirmation Beep & Haptic Pulse
+  playPreloadAudio('success');
+  if (navigator.vibrate) {
+    try { navigator.vibrate([50]); } catch (e) {}
+  }
+
+  // 2. Automatically close camera viewfinder
+  closeGenerateScanner();
+
+  // 3. Clean raw code and extract tracking number if embedded
+  const rawTrimmed = String(rawCode).trim();
+  let trackingClean = rawTrimmed;
+
+  if (typeof parseOutagePayload === 'function') {
+    const parsed = parseOutagePayload(rawTrimmed);
+    if (parsed && parsed.barcode) {
+      trackingClean = parsed.barcode.trim();
+    }
+  }
+
+  // 4. Auto-detect 2D vs 1D Symbology
+  const fmtLower = String(format || '').toLowerCase();
+  const is2D = fmtLower.includes('qr') ||
+               fmtLower.includes('matrix') ||
+               fmtLower.includes('aztec') ||
+               fmtLower.includes('pdf') ||
+               rawTrimmed.startsWith('http://') ||
+               rawTrimmed.startsWith('https://') ||
+               (rawTrimmed.startsWith('{') && rawTrimmed.endsWith('}')) ||
+               (rawTrimmed.startsWith('[') && rawTrimmed.endsWith(']'));
+
+  if (is2D) {
+    // Switch to QR Code (2D) mode
+    switchGenerateMode('qr');
+    $('#qrInput').val(rawTrimmed);
+    $('#barcodeNumber').val(trackingClean.toUpperCase());
+    generateQrCode();
+    showToast(`Decoded 2D Code: ${trackingClean || rawTrimmed}`, 'ok');
+  } else {
+    // Switch to Code 128 (1D linear) mode
+    switchGenerateMode('barcode');
+    $('#barcodeNumber').val(trackingClean.toUpperCase());
+    $('#qrInput').val(trackingClean);
+    render();
+    showToast(`Decoded Barcode: ${trackingClean.toUpperCase()}`, 'ok');
   }
 }

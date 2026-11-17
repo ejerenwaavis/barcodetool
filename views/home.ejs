@@ -648,21 +648,68 @@
             </div>
 
             <!-- MODE A: Code 128 Barcode -->
+            
+            <!-- Inline Fast Camera Scanner for Generate Tab -->
+            <div id="generateScannerInline" class="gen-scanner-inline mb-3" style="display:none;">
+              <div class="gen-scanner-header d-flex align-items-center justify-content-between p-2 px-3">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="gen-scanner-pulse-dot"></span>
+                  <strong style="font-size:0.85rem; color:#FFFFFF;">Scan Barcode or QR Code to Auto-Fill</strong>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <button type="button" class="btn btn-sm btn-icon text-white p-0" id="genTorchBtn" onclick="toggleGenTorch()" title="Toggle Flashlight" style="display:none; width:28px; height:28px;">
+                    <i class="bi bi-lightbulb" style="font-size:1.05rem;"></i>
+                  </button>
+                  <button type="button" class="btn-close btn-close-white btn-sm" aria-label="Close" onclick="closeGenerateScanner()"></button>
+                </div>
+              </div>
+              <div class="gen-scanner-viewport">
+                <video id="generateVideo" playsinline autoplay muted></video>
+                <div class="gen-scanner-overlay">
+                  <div class="gen-scanner-reticle">
+                    <div class="gen-reticle-corner tl"></div>
+                    <div class="gen-reticle-corner tr"></div>
+                    <div class="gen-reticle-corner bl"></div>
+                    <div class="gen-reticle-corner br"></div>
+                    <div class="gen-laser-line"></div>
+                  </div>
+                </div>
+                <div class="gen-scanner-hint">
+                  <span id="generateScannerStatus">Point lens at 1D Barcode or 2D QR Code...</span>
+                </div>
+              </div>
+              <div class="gen-scanner-footer p-2 px-3 d-flex justify-content-between align-items-center">
+                <button type="button" class="btn ghost btn-sm py-1 px-3" onclick="closeGenerateScanner()" style="font-size:0.8rem; background:rgba(255,255,255,0.08); color:#FFFFFF; border-color:rgba(255,255,255,0.2);">
+                  <i class="bi bi-x-circle me-1"></i> Cancel
+                </button>
+                <span class="text-white-50" style="font-size:0.75rem;">
+                  <i class="bi bi-magic me-1 text-warning"></i> Instant Decode &amp; Auto-Generate
+                </span>
+              </div>
+            </div>
+
             <div id="generateBarcodeMode">
               <div class="section-label">Code 128 Barcode <span>Single Label</span></div>
               <div class="d-flex gap-2 mb-3">
-                <div class="scan-input-wrap flex-grow-1">
+                <div class="scan-input-wrap has-dual-actions flex-grow-1">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><rect x="9" y="9" width="6" height="6"/></svg>
                   <input type="text" id="barcodeNumber" style="text-transform:uppercase" class="scan-input mono" value="<%= (tracking ? tracking : '') %>" placeholder="Start typing tracking number..." aria-label="tracking">
-                  <button type="button" class="ocr-btn" onclick="openSlimOcrReader('barcodeNumber')" title="Focus & Scan Digits with Camera">
-                    <i class="bi bi-camera"></i>
-                  </button>
+                  <div class="scan-input-actions">
+                    <button type="button" class="gen-action-btn btn-scan" onclick="openGenerateScanner('barcodeNumber')" title="Camera Scan Barcode / QR (Fast Regenerate)">
+                      <i class="bi bi-upc-scan"></i>
+                      <span>Scan</span>
+                    </button>
+                    <button type="button" class="gen-action-btn btn-ocr" onclick="openSlimOcrReader('barcodeNumber')" title="Camera Text / Numbers OCR">
+                      <i class="bi bi-camera"></i>
+                      <span>OCR</span>
+                    </button>
+                  </div>
                 </div>
                 <button onclick="trackPackage()" id="trackPackageBtn" class="btn primary disabled" style="flex:0 0 auto; padding:10px 18px;">Track</button>
               </div>
               <input disabled type="text" id="barcodeBrand" style="text-transform:uppercase" class="d-none d-print-none form-control" placeholder="Brand Name">
 
-              <div class="text-center d-print-none mt-3" id="printArea" style="display: none; background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:18px;">
+              <div class="text-center d-print-none mt-3" id="printArea" style="display: none; background:#FFFFFF; border:2px solid var(--line); border-radius:14px; padding:22px 18px; box-shadow:0 4px 16px rgba(0,0,0,0.06);">
                 <canvas class="pb-2 pt-0" id="barcode" style="max-width:100%;"></canvas>
               </div>
 
@@ -679,12 +726,19 @@
                   <i class="bi bi-gear-fill" style="font-size:1.15rem;"></i>
                 </button>
               </div>
-              <div class="mb-3 scan-input-wrap">
+              <div class="mb-3 scan-input-wrap has-dual-actions">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><rect x="9" y="9" width="6" height="6"/></svg>
                 <input type="text" id="qrInput" class="scan-input mono" placeholder="Enter text or URL to generate QR code">
-                <button type="button" class="ocr-btn" onclick="openSlimOcrReader('qrInput')" title="Focus & Scan Text or QR Code">
-                  <i class="bi bi-camera"></i>
-                </button>
+                <div class="scan-input-actions">
+                  <button type="button" class="gen-action-btn btn-scan" onclick="openGenerateScanner('qrInput')" title="Camera Scan Barcode / QR (Fast Regenerate)">
+                    <i class="bi bi-upc-scan"></i>
+                    <span>Scan</span>
+                  </button>
+                  <button type="button" class="gen-action-btn btn-ocr" onclick="openSlimOcrReader('qrInput')" title="Camera Text / Numbers OCR">
+                    <i class="bi bi-camera"></i>
+                    <span>OCR</span>
+                  </button>
+                </div>
               </div>
               <!-- Settings Panel -->
               <div id="qrSettingsPanel" class="p-3 mb-3 rounded" style="display:none; background: var(--paper); border: 1px solid var(--line);">
@@ -713,7 +767,7 @@
                 </div>
               </div>
 
-              <div class="p-0 m-auto text-center mt-2" id="qrPrintArea" style="display: none;">
+              <div class="p-0 m-auto text-center mt-3" id="qrPrintArea" style="display: none; background:#FFFFFF; border:2px solid var(--line); border-radius:14px; padding:22px 18px; box-shadow:0 4px 16px rgba(0,0,0,0.06); max-width:360px;">
                 <canvas class="pb-2 pt-0" id="qrCanvas" style="max-width:100%; border-radius: 8px;"></canvas>
               </div>
 

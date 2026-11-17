@@ -841,6 +841,193 @@ body {
 .scan-input-wrap .scan-input {
   padding-right: 42px;
 }
+
+/* Dual Action Buttons (Scan + OCR) inside input wrap */
+.scan-input-wrap.has-dual-actions .scan-input {
+  padding-right: 142px;
+}
+
+.scan-input-actions {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 2;
+}
+
+.gen-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: all .15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.gen-action-btn i {
+  font-size: 12px;
+}
+
+.gen-action-btn.btn-scan {
+  background: var(--blue-soft);
+  color: var(--blue);
+  border-color: rgba(42, 92, 255, 0.25);
+}
+
+.gen-action-btn.btn-scan:hover,
+.gen-action-btn.btn-scan:active {
+  background: var(--blue);
+  color: #FFFFFF;
+}
+
+.gen-action-btn.btn-ocr {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(255, 90, 31, 0.25);
+}
+
+.gen-action-btn.btn-ocr:hover,
+.gen-action-btn.btn-ocr:active {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+@media (max-width: 380px) {
+  .scan-input-wrap.has-dual-actions .scan-input {
+    padding-right: 120px;
+  }
+  .gen-action-btn {
+    padding: 3px 6px;
+    font-size: 10.5px;
+    gap: 3px;
+  }
+  .gen-action-btn i {
+    font-size: 11px;
+  }
+}
+
+/* Inline Fast Camera Scanner for Generate Tab */
+.gen-scanner-inline {
+  background: var(--ink-900);
+  border: 2px solid var(--blue);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: fadeInDown 0.25s ease-out;
+}
+
+.gen-scanner-header {
+  background: var(--ink-800);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gen-scanner-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10B981;
+  box-shadow: 0 0 8px #10B981;
+  display: inline-block;
+  animation: pulse 1.5s infinite;
+}
+
+.gen-scanner-viewport {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: #000000;
+  overflow: hidden;
+}
+
+.gen-scanner-viewport video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.gen-scanner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.gen-scanner-reticle {
+  position: relative;
+  width: 78%;
+  max-width: 320px;
+  height: 130px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+}
+
+.gen-reticle-corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-color: #2A5CFF;
+  border-style: solid;
+}
+.gen-reticle-corner.tl { top: -1px; left: -1px; border-width: 3px 0 0 3px; border-top-left-radius: 6px; }
+.gen-reticle-corner.tr { top: -1px; right: -1px; border-width: 3px 3px 0 0; border-top-right-radius: 6px; }
+.gen-reticle-corner.bl { bottom: -1px; left: -1px; border-width: 0 0 3px 3px; border-bottom-left-radius: 6px; }
+.gen-reticle-corner.br { bottom: -1px; right: -1px; border-width: 0 3px 3px 0; border-bottom-right-radius: 6px; }
+
+.gen-laser-line {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #2A5CFF, #60A5FA, #2A5CFF, transparent);
+  box-shadow: 0 0 8px #2A5CFF;
+  animation: genLaserMove 2s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+@keyframes genLaserMove {
+  0% { top: 10%; }
+  100% { top: 90%; }
+}
+
+.gen-scanner-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.gen-scanner-hint span {
+  background: rgba(10, 20, 32, 0.85);
+  color: #FFFFFF;
+  font-size: 0.76rem;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.gen-scanner-footer {
+  background: var(--ink-800);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
 .scan-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
