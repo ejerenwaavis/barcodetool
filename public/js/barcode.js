@@ -46,6 +46,7 @@ window.onload = (event) => {
   checkAndTrack();
   initPreloadScan();
   initConsoleNavigation();
+  initOutageSession();
 };
 
 function switchGenerateMode(mode) {
@@ -3335,4 +3336,1133 @@ function applyOcrResult() {
   }
 
   closeSlimOcrReader();
+}
+
+/* ==========================================================================
+   Outage Intake Mode (Offline Manifest Builder) Engine
+   ========================================================================== */
+
+const OUTAGE_STORAGE_KEY = 'barcodetool_outage_session_v1';
+let outageSession = { active: false, timestamp: 0, packages: [] };
+let outageScanning = false;
+let outageStream = null;
+let outageDetector = null;
+let outageZxingReader = null;
+let outageLastCode = '';
+let outageLastCodeTime = 0;
+const OUTAGE_REPEAT_WINDOW = 1800;
+let outageTapOrderActive = false;
+let outageTapNextSeq = 1;
+let outageOcrProcessing = false;
+
+const US_STREET_REGEX = /\b\d{1,6}\s+(?:[NSEW]|NORTH|SOUTH|EAST|WEST\s+)?[A-Za-z0-9\s.,#-]+?\s+(?:ST|STREET|AVE|AVENUE|RD|ROAD|DR|DRIVE|LN|LANE|CT|COURT|BLVD|BOULEVARD|WAY|PKWY|PARKWAY|CIR|CIRCLE|PL|PLACE|HWY|HIGHWAY|GTWY|GATEWAY|TER|TERRACE|TRL|TRAIL|LOOP|TRACE|RUN|PASS|ROW|PATH|WALK|VIEW|COVE|ISLE|BND|BEND)(?:\s+(?:[NSEW]|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST))?\b/i;
+const US_ZIP_REGEX = /\b\d{5}(?:-\d{4})?\b/;
+const US_UNIT_REGEX = /\b(?:APT|UNIT|STE|SUITE|BLDG|RM|ROOM|FL|FLOOR|#)\s*([A-Za-z0-9\-]+)\b/i;
+
+function initOutageSession() {
+  try {
+    const saved = localStorage.getItem(OUTAGE_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.packages && parsed.packages.length > 0) {
+        outageSession = parsed;
+        const total = outageSession.packages.length;
+        $('#outageResumeDetails').text(`${total} package(s) ready in intake`);
+        $('#outageResumeBanner').removeClass('d-none').addClass('d-flex');
+        $('#outageModeBadge').text(total).show();
+      }
+    }
+  } catch(e) {
+    console.warn('Error loading outage session:', e);
+  }
+
+  // Handle enter key in manual input fields
+  $('#outageInputBarcode').on('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      $('#outageInputAddress').focus();
+    }
+  });
+
+  $('#outageInputAddress, #outageInputUnit, #outageInputZip').on('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitManualOutagePackage();
+    }
+  });
+}
+
+function saveOutageSession() {
+  try {
+    if (outageSession && outageSession.packages) {
+      outageSession.active = outageSession.packages.length > 0;
+      outageSession.timestamp = Date.now();
+      localStorage.setItem(OUTAGE_STORAGE_KEY, JSON.stringify(outageSession));
+      updateOutageMetrics();
+    }
+  } catch(e) {
+    console.warn('Error saving outage session:', e);
+  }
+}
+
+function updateOutageMetrics() {
+  const total = (outageSession && outageSession.packages) ? outageSession.packages.length : 0;
+  
+  // Calculate unique stops (sharing address + unit)
+  const uniqueStops = new Set();
+  if (outageSession && outageSession.packages) {
+    outageSession.packages.forEach(p => {
+      const key = ((p.address || p.barcode) + '|' + (p.unit || '') + '|' + (p.zip || '')).toLowerCase().trim();
+      uniqueStops.add(key);
+    });
+  }
+
+  $('#outagePkgCount').text(total);
+  $('#outageStopCount').text(uniqueStops.size);
+
+  if (total > 0) {
+    $('#outageModeBadge').text(total).show();
+    $('#outageResumeDetails').text(`${total} package(s) ready in intake`);
+  } else {
+    $('#outageModeBadge').hide();
+    $('#outageResumeBanner').addClass('d-none').removeClass('d-flex');
+  }
+}
+
+function switchManifestMode(mode) {
+  if (mode === 'outage') {
+    $('#manifestModeUploadBtn').removeClass('active');
+    $('#manifestModeOutageBtn').addClass('active');
+    $('#preloadUploadCard').hide();
+    $('#outageIntakeCard').show();
+    renderOutageTable();
+    updateOutageMetrics();
+  } else {
+    $('#manifestModeOutageBtn').removeClass('active');
+    $('#manifestModeUploadBtn').addClass('active');
+    $('#outageIntakeCard').hide();
+    $('#preloadUploadCard').show();
+    if (outageScanning) {
+      stopOutageCamera();
+    }
+  }
+}
+
+function resumeOutageSession() {
+  switchManifestMode('outage');
+  showToast('Resumed active Outage Intake session', 'ok');
+}
+
+function confirmClearOutageSession(fromBanner = false) {
+  const count = (outageSession && outageSession.packages) ? outageSession.packages.length : 0;
+  if (count > 0) {
+    if (!confirm(`Are you sure you want to finish and clear this outage session? ${count} scanned package(s) will be cleared.`)) {
+      return;
+    }
+  }
+
+  if (outageScanning) {
+    stopOutageCamera();
+  }
+
+  outageSession = { active: false, timestamp: 0, packages: [] };
+  localStorage.removeItem(OUTAGE_STORAGE_KEY);
+  outageTapOrderActive = false;
+  $('#outageTapStatusIndicator').hide();
+  $('#outageTable').removeClass('outage-tap-active');
+  $('#outageResumeBanner').addClass('d-none').removeClass('d-flex');
+  $('#outageModeBadge').hide();
+
+  // Reset latest card
+  $('#outageLatestIndex').text('--');
+  $('#outageLatestBarcode').text('READY TO SCAN');
+  $('#outageLatestCourier').text('Standby');
+  $('#outageLatestAddress').text('Scan box 2D/1D barcode or snap label');
+  $('#outageLatestUnit').text('Unit: --');
+  $('#outageLatestZip').text('ZIP: --');
+  $('#outageDuplicateAlert').hide();
+  $('#outageMultiAlert').hide();
+
+  renderOutageTable();
+  updateOutageMetrics();
+  showToast('Outage intake session cleared', '');
+
+  if (fromBanner) {
+    switchManifestMode('upload');
+  }
+}
+
+// --------------------- Parser & Normalization ---------------------
+
+function extractOutageTrackingNumber(text) {
+  if (!text) return null;
+  const m = text.match(/(1LS[A-Za-z0-9]{12}|D100[A-Za-z0-9]{11}|C12[A-Za-z0-9]{12}|SPX[A-Za-z0-9]{8,24}|1Z[A-Za-z0-9]{16}|TBA[0-9]{12}|9[1-5]\d{20,24})/i);
+  return m ? m[0].toUpperCase() : null;
+}
+
+function parseOutageAddressText(raw) {
+  if (!raw) return { address: '', unit: '', zip: '' };
+  let text = String(raw).replace(/\r/g, ' ').replace(/\n/g, ' ').trim();
+  
+  let zip = '';
+  const zm = text.match(US_ZIP_REGEX);
+  if (zm) zip = zm[0].split('-')[0];
+
+  let unit = '';
+  const um = text.match(US_UNIT_REGEX);
+  if (um) unit = um[0].trim();
+
+  let address = '';
+  const sm = text.match(US_STREET_REGEX);
+  if (sm) address = sm[0].trim();
+
+  return { address, unit, zip };
+}
+
+function parseOutagePayload(rawText) {
+  if (!rawText) return null;
+  const raw = String(rawText).trim();
+
+  let barcode = '';
+  let address = '';
+  let unit = '';
+  let zip = '';
+  let recipient = '';
+  let hasAddress = false;
+
+  // 1. JSON parse
+  if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('[') && raw.endsWith(']'))) {
+    try {
+      const obj = JSON.parse(raw);
+      if (typeof obj === 'object' && obj !== null) {
+        barcode = obj.barcode || obj.tracking || obj.trackingNo || obj.trackingNumber || obj.track || obj.id || obj.tba || '';
+        address = obj.address || obj.street || obj.streetAddress || obj.addr || (obj.shipTo && (obj.shipTo.address || obj.shipTo.street)) || '';
+        unit = obj.unit || obj.apt || obj.suite || (obj.shipTo && obj.shipTo.unit) || '';
+        zip = obj.zip || obj.zipCode || obj.postalCode || (obj.shipTo && obj.shipTo.zip) || '';
+        recipient = obj.recipient || obj.name || obj.customer || (obj.shipTo && obj.shipTo.name) || '';
+        if (address) hasAddress = true;
+      }
+    } catch(e) {}
+  }
+
+  // 2. URL Query Params
+  if (!hasAddress && (raw.includes('http://') || raw.includes('https://') || raw.includes('?'))) {
+    try {
+      const queryIdx = raw.indexOf('?');
+      if (queryIdx !== -1) {
+        const params = new URLSearchParams(raw.substring(queryIdx));
+        barcode = barcode || params.get('tracking') || params.get('barcode') || params.get('id') || params.get('track') || '';
+        address = address || params.get('address') || params.get('addr') || params.get('street') || '';
+        unit = unit || params.get('unit') || params.get('apt') || '';
+        zip = zip || params.get('zip') || params.get('zipcode') || params.get('postal') || '';
+        recipient = recipient || params.get('name') || params.get('recipient') || '';
+        if (address) hasAddress = true;
+      }
+    } catch(e) {}
+  }
+
+  // 3. Key-Value pairs (e.g. ADDR: ... | ZIP: ... | TRACK: ...)
+  if (!hasAddress) {
+    const kvPairs = raw.match(/\b(ADDR|ADDRESS|STREET|ST|ZIP|POSTAL|TRACK|TRACKING|BARCODE|PKG|NAME|REC|RECIPIENT|TO|APT|UNIT|SUITE|STE)\s*[:=]\s*([^|\n\r;]+)/gi);
+    if (kvPairs && kvPairs.length >= 2) {
+      kvPairs.forEach(pair => {
+        const parts = pair.split(/[:=]/);
+        const key = parts[0].trim().toUpperCase();
+        const val = parts.slice(1).join(':').trim();
+        if (['ADDR', 'ADDRESS', 'STREET', 'ST'].includes(key) && !address) { address = val; hasAddress = true; }
+        else if (['ZIP', 'POSTAL'].includes(key) && !zip) { zip = val; }
+        else if (['TRACK', 'TRACKING', 'BARCODE', 'PKG'].includes(key) && !barcode) { barcode = val; }
+        else if (['NAME', 'REC', 'RECIPIENT', 'TO'].includes(key) && !recipient) { recipient = val; }
+        else if (['APT', 'UNIT', 'SUITE', 'STE'].includes(key) && !unit) { unit = val; }
+      });
+    }
+  }
+
+  // 4. Delimited tokens (| or \t or ~ or ;)
+  if (!hasAddress && (raw.includes('|') || raw.includes('\t') || raw.includes('~') || raw.includes(';') || raw.includes('\n'))) {
+    const tokens = raw.split(/[|\t~;\n\r]+/).map(t => t.trim()).filter(Boolean);
+    for (const t of tokens) {
+      if (!barcode) {
+        const tc = extractOutageTrackingNumber(t);
+        if (tc) barcode = tc;
+      }
+      if (!zip) {
+        const zm = t.match(US_ZIP_REGEX);
+        if (zm) zip = zm[0].split('-')[0];
+      }
+      if (!address) {
+        const sm = t.match(US_STREET_REGEX);
+        if (sm) {
+          address = sm[0].trim();
+          hasAddress = true;
+        }
+      }
+      if (!unit) {
+        const um = t.match(US_UNIT_REGEX);
+        if (um) unit = um[0].trim();
+      }
+    }
+  }
+
+  // 5. Fallback tracking and street extraction
+  if (!barcode) {
+    barcode = extractOutageTrackingNumber(raw) || raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  }
+  if (!hasAddress) {
+    const streetMatch = raw.match(US_STREET_REGEX);
+    if (streetMatch) {
+      address = streetMatch[0].trim();
+      hasAddress = true;
+    }
+    const zipMatch = raw.match(US_ZIP_REGEX);
+    if (zipMatch && !zip) zip = zipMatch[0].split('-')[0];
+    const unitMatch = raw.match(US_UNIT_REGEX);
+    if (unitMatch && !unit) unit = unitMatch[0].trim();
+  }
+
+  barcode = (barcode || '').toUpperCase().trim();
+  const courier = detectCourier(barcode);
+
+  return {
+    barcode,
+    address: (address || '').trim(),
+    unit: (unit || '').trim(),
+    zip: (zip || '').trim(),
+    recipient: (recipient || '').trim(),
+    courier,
+    hasAddress
+  };
+}
+
+function normOutageAddress(addr) {
+  if (!addr) return '';
+  return addr.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// --------------------- Ingestion & Duplicate / Multi-Package Logic ---------------------
+
+async function handleOutageBarcodeScan(rawCode, source = '2D/1D Cam') {
+  if (!rawCode) return;
+  const parsed = parseOutagePayload(rawCode);
+  if (!parsed || !parsed.barcode) {
+    showToast('Could not decode barcode from payload', 'warn');
+    return;
+  }
+
+  // Visual scan flash on viewfinder
+  const scanBox = document.getElementById('outageScanBox');
+  if (scanBox) {
+    scanBox.classList.remove('flash');
+    void scanBox.offsetWidth;
+    scanBox.classList.add('flash');
+  }
+
+  // 1. Duplicate Check
+  const existingPkg = outageSession.packages.find(p => p.barcode === parsed.barcode);
+  if (existingPkg) {
+    playPreloadAudio('duplicate');
+    triggerPreloadHaptic();
+
+    // Show duplicate alert box
+    $('#outageDuplicateAlert').text(`⚠️ ALREADY IN INTAKE (Duplicate: ${parsed.barcode})`).show();
+    $('#outageMultiAlert').hide();
+
+    $('#outageLatestBarcode').text(parsed.barcode);
+    $('#outageLatestCourier').text(existingPkg.courier || 'General');
+    $('#outageLatestAddress').text(existingPkg.address || 'Address on file');
+    $('#outageLatestUnit').text(existingPkg.unit ? 'Unit: ' + existingPkg.unit : 'Unit: --');
+    $('#outageLatestZip').text(existingPkg.zip ? 'ZIP: ' + existingPkg.zip : 'ZIP: --');
+
+    if (preloadVoiceEnabled) {
+      speakText('Warning: Already in intake');
+    }
+
+    showToast(`Duplicate: ${parsed.barcode} is already in intake!`, 'warn');
+    return;
+  }
+
+  $('#outageDuplicateAlert').hide();
+
+  // 2. Multi-Package Stop Check
+  let isMulti = false;
+  let multiMatchingStop = null;
+  if (parsed.address) {
+    const norm = normOutageAddress(parsed.address);
+    const match = outageSession.packages.find(p => p.address && normOutageAddress(p.address) === norm);
+    if (match) {
+      isMulti = true;
+      match.multiStop = true;
+      multiMatchingStop = match.seq || null;
+      $('#outageMultiAlert').text(
+        multiMatchingStop ? `📦 Multi-Package Stop (Shares Stop #${multiMatchingStop})` : '📦 Multi-Package Stop (Shares address)'
+      ).show();
+    } else {
+      $('#outageMultiAlert').hide();
+    }
+  } else {
+    $('#outageMultiAlert').hide();
+  }
+
+  // 3. Create Package Record
+  const newPkg = {
+    id: 'outage_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    barcode: parsed.barcode,
+    address: parsed.address,
+    unit: parsed.unit,
+    zip: parsed.zip,
+    recipient: parsed.recipient,
+    courier: parsed.courier || detectCourier(parsed.barcode),
+    source: parsed.hasAddress ? '2D-Payload' : (source === 'Manual' ? 'Manual' : '1D-Barcode'),
+    seq: multiMatchingStop ? multiMatchingStop : null,
+    multiStop: isMulti,
+    timestamp: Date.now()
+  };
+
+  outageSession.packages.unshift(newPkg);
+  outageSession.active = true;
+  saveOutageSession();
+
+  playPreloadAudio('success');
+  triggerPreloadHaptic();
+
+  // Update latest intake card
+  $('#outageLatestIndex').text(outageSession.packages.length);
+  $('#outageLatestBarcode').text(newPkg.barcode);
+  $('#outageLatestCourier').text(newPkg.courier + ' · ' + newPkg.source);
+  $('#outageLatestAddress').text(newPkg.address || 'Address pending OCR/Manual fix');
+  $('#outageLatestUnit').text(newPkg.unit ? 'Unit: ' + newPkg.unit : 'Unit: --');
+  $('#outageLatestZip').text(newPkg.zip ? 'ZIP: ' + newPkg.zip : 'ZIP: --');
+
+  renderOutageTable();
+
+  // 4. Automatic OCR Fallback (if tracking-only 1D barcode was scanned)
+  if (!parsed.hasAddress) {
+    if (outageScanning && !outageOcrProcessing) {
+      showToast(`Barcode ${newPkg.barcode} logged! Reading address from label...`, 'ok');
+      runAutoOcrOnOutageFrame(newPkg.id);
+    } else {
+      showToast(`Barcode ${newPkg.barcode} logged! Tap 'Snap OCR' or speak address.`, 'ok');
+    }
+  } else {
+    showToast(`Intake Stop logged: ${newPkg.address} (${newPkg.barcode})`, 'ok');
+    if (preloadVoiceEnabled) {
+      speakText(`Intake recorded. ${newPkg.address || newPkg.barcode}`);
+    }
+  }
+}
+
+function submitManualOutagePackage() {
+  const barcode = ($('#outageInputBarcode').val() || '').trim().toUpperCase();
+  const address = ($('#outageInputAddress').val() || '').trim();
+  const unit = ($('#outageInputUnit').val() || '').trim();
+  const zip = ($('#outageInputZip').val() || '').trim();
+
+  if (!barcode && !address) {
+    showToast('Please enter at least a barcode or address', 'warn');
+    return;
+  }
+
+  const payload = barcode
+    ? `TRACK: ${barcode} | ADDR: ${address} | UNIT: ${unit} | ZIP: ${zip}`
+    : `ADDR: ${address} | UNIT: ${unit} | ZIP: ${zip}`;
+
+  handleOutageBarcodeScan(payload, 'Manual');
+
+  // Clear inputs
+  $('#outageInputBarcode').val('');
+  $('#outageInputAddress').val('');
+  $('#outageInputUnit').val('');
+  $('#outageInputZip').val('');
+  $('#outageInputBarcode').focus();
+}
+
+// --------------------- Camera Viewfinder ---------------------
+
+function toggleOutageCamera() {
+  if (outageScanning) {
+    stopOutageCamera();
+  } else {
+    startOutageCamera();
+  }
+}
+
+async function startOutageCamera() {
+  const wrap = $('#outageCamWrap');
+  const placeholder = $('#outageCamPlaceholder');
+  const btnText = $('#outageCamBtnText');
+  const status = $('#outageCamStatus');
+  const statusText = $('#outageCamStatusText');
+  const video = document.getElementById('outageVideo');
+
+  placeholder.hide();
+  wrap.show();
+  status.show();
+  statusText.text('Starting camera...');
+  btnText.text('Camera Off');
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusText.text('Camera not supported on this browser.');
+    return;
+  }
+
+  try {
+    outageStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = outageStream;
+    await video.play();
+  } catch (err) {
+    statusText.text('Camera failed: ' + (err.message || err.name));
+    return;
+  }
+
+  if (!('BarcodeDetector' in window)) {
+    if (typeof ZXing !== 'undefined') {
+      try {
+        outageZxingReader = new ZXing.BrowserMultiFormatReader();
+      } catch (e) {
+        console.warn('ZXing init error:', e);
+      }
+    }
+  } else {
+    const FORMATS = ['qr_code', 'data_matrix', 'pdf417', 'aztec', 'code_128', 'code_39', 'code_93', 'ean_13', 'upc_a'];
+    try {
+      outageDetector = new BarcodeDetector({ formats: FORMATS });
+    } catch (e) {
+      outageDetector = new BarcodeDetector();
+    }
+  }
+
+  status.hide();
+  outageScanning = true;
+
+  if (outageZxingReader) {
+    outageZxingReader.decodeFromVideoElement(video, (result, err) => {
+      if (!outageScanning) return;
+      if (result && result.getText()) {
+        const cVal = result.getText();
+        const now = Date.now();
+        if (cVal === outageLastCode && (now - outageLastCodeTime) < OUTAGE_REPEAT_WINDOW) {
+          return;
+        }
+        outageLastCode = cVal;
+        outageLastCodeTime = now;
+        handleOutageBarcodeScan(cVal, '2D/1D Cam');
+      }
+    });
+  } else {
+    loopOutageCamera();
+  }
+}
+
+function stopOutageCamera() {
+  outageScanning = false;
+  if (outageZxingReader) {
+    try { outageZxingReader.reset(); } catch(e) {}
+    outageZxingReader = null;
+  }
+  if (outageStream) {
+    outageStream.getTracks().forEach(track => track.stop());
+    outageStream = null;
+  }
+  $('#outageCamWrap').hide();
+  $('#outageCamPlaceholder').show();
+  $('#outageCamBtnText').text('Camera On');
+}
+
+async function loopOutageCamera() {
+  if (!outageScanning) return;
+  const video = document.getElementById('outageVideo');
+
+  if (outageDetector && video && video.readyState >= 2) {
+    try {
+      const codes = await outageDetector.detect(video);
+      if (codes && codes.length) {
+        for (const c of codes) {
+          if (c.rawValue) {
+            const now = Date.now();
+            if (c.rawValue === outageLastCode && (now - outageLastCodeTime) < OUTAGE_REPEAT_WINDOW) {
+              continue;
+            }
+            outageLastCode = c.rawValue;
+            outageLastCodeTime = now;
+            handleOutageBarcodeScan(c.rawValue, '2D/1D Cam');
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  requestAnimationFrame(loopOutageCamera);
+}
+
+// --------------------- OCR Fallback & Snap Photo ---------------------
+
+async function runAutoOcrOnOutageFrame(pkgId) {
+  const pkg = outageSession.packages.find(p => p.id === pkgId);
+  if (!pkg || typeof Tesseract === 'undefined') return;
+
+  const video = document.getElementById('outageVideo');
+  if (!video || video.readyState < 2) return;
+
+  outageOcrProcessing = true;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const res = await Tesseract.recognize(canvas, 'eng');
+    const text = (res && res.data && res.data.text) ? res.data.text : '';
+
+    if (text) {
+      const addrInfo = parseOutageAddressText(text);
+      if (addrInfo.address || addrInfo.zip) {
+        pkg.address = addrInfo.address || pkg.address;
+        pkg.unit = addrInfo.unit || pkg.unit;
+        pkg.zip = addrInfo.zip || pkg.zip;
+        pkg.source = 'OCR-Auto';
+
+        saveOutageSession();
+        renderOutageTable();
+
+        // Update latest card if matches
+        if (outageSession.packages[0] && outageSession.packages[0].id === pkg.id) {
+          $('#outageLatestAddress').text(pkg.address);
+          $('#outageLatestUnit').text(pkg.unit ? 'Unit: ' + pkg.unit : 'Unit: --');
+          $('#outageLatestZip').text(pkg.zip ? 'ZIP: ' + pkg.zip : 'ZIP: --');
+          $('#outageLatestCourier').text(pkg.courier + ' · OCR-Auto');
+        }
+
+        showToast(`OCR matched: ${pkg.address} (${pkg.zip})`, 'ok');
+        if (preloadVoiceEnabled) {
+          speakText(`Address found: ${pkg.address}`);
+        }
+      }
+    }
+  } catch(e) {
+    console.warn('Auto OCR error:', e);
+  } finally {
+    outageOcrProcessing = false;
+  }
+}
+
+function snapCurrentVideoOrFileForOcr() {
+  const video = document.getElementById('outageVideo');
+  if (outageScanning && video && video.readyState >= 2) {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    processOutageImageCanvas(canvas);
+  } else {
+    $('#outageSnapFileInput').click();
+  }
+}
+
+function handleOutageSnapFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      processOutageImageCanvas(canvas);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function processOutageImageCanvas(canvas) {
+  showToast('Reading label photo via Barcode + OCR engine...', '');
+
+  // 1. Try decoding barcode
+  let detectedCode = null;
+  if (typeof decodeBarcodeFromCanvas === 'function') {
+    detectedCode = await decodeBarcodeFromCanvas(canvas);
+  }
+
+  // 2. Run OCR for address
+  let ocrAddress = { address: '', unit: '', zip: '' };
+  if (typeof Tesseract !== 'undefined') {
+    try {
+      const res = await Tesseract.recognize(canvas, 'eng');
+      const text = (res && res.data && res.data.text) ? res.data.text : '';
+      ocrAddress = parseOutageAddressText(text);
+
+      // If barcode wasn't decoded from symbology, try finding it in OCR text
+      if (!detectedCode) {
+        detectedCode = extractOutageTrackingNumber(text);
+      }
+    } catch(e) {
+      console.warn('Snap OCR error:', e);
+    }
+  }
+
+  if (detectedCode || ocrAddress.address) {
+    const payload = `TRACK: ${detectedCode || ''} | ADDR: ${ocrAddress.address} | UNIT: ${ocrAddress.unit} | ZIP: ${ocrAddress.zip}`;
+    handleOutageBarcodeScan(payload, 'Snap-OCR');
+  } else {
+    showToast('Could not extract barcode or address from photo. Please enter manually.', 'warn');
+  }
+}
+
+// --------------------- Voice-to-Text Input ---------------------
+
+function startVoiceAddressInput(targetInputId) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast('Voice-to-text not supported in this browser. Please type.', 'warn');
+    return;
+  }
+
+  try {
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    showToast('🎙️ Listening... Speak street address, unit, and zip code', '');
+
+    recognition.onresult = function(event) {
+      const transcript = event.results[0][0].transcript;
+      showToast(`Heard: "${transcript}"`, 'ok');
+
+      const parsed = parseOutageAddressText(transcript);
+      if (targetInputId === 'outageInputAddress') {
+        $('#outageInputAddress').val(parsed.address || transcript);
+        if (parsed.unit) $('#outageInputUnit').val(parsed.unit);
+        if (parsed.zip) $('#outageInputZip').val(parsed.zip);
+      } else if (targetInputId === 'editOutageAddress') {
+        $('#editOutageAddress').val(parsed.address || transcript);
+        if (parsed.unit) $('#editOutageUnit').val(parsed.unit);
+        if (parsed.zip) $('#editOutageZip').val(parsed.zip);
+      } else {
+        $('#' + targetInputId).val(transcript);
+      }
+    };
+
+    recognition.onerror = function(err) {
+      showToast('Voice input error: ' + (err.error || 'speech failed'), 'warn');
+    };
+
+    recognition.start();
+  } catch(e) {
+    console.warn('SpeechRecognition error:', e);
+    showToast('Failed to start microphone: ' + e.message, 'err');
+  }
+}
+
+// --------------------- Post-Intake Arrangement & Sequence Builder ---------------------
+
+function parseStreetAndNumber(address) {
+  if (!address) return { houseNum: 999999, streetName: '' };
+  const clean = address.trim();
+  const numMatch = clean.match(/^(\d+)/);
+  const houseNum = numMatch ? parseInt(numMatch[1], 10) : 999999;
+  let streetName = clean.replace(/^\d+\s*/, '');
+  streetName = streetName.replace(/^(?:N|S|E|W|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST)\.?\s+/i, '');
+  return { houseNum, streetName: streetName.toLowerCase() };
+}
+
+// Option A: Auto-Group by Zip & Street
+function autoGroupOutageByZipAndStreet() {
+  if (!outageSession || !outageSession.packages || !outageSession.packages.length) {
+    showToast('No packages in intake to arrange', 'warn');
+    return;
+  }
+
+  // Sort: Zip -> Street Name -> House #
+  outageSession.packages.sort((a, b) => {
+    const zipA = parseInt(a.zip, 10) || 99999;
+    const zipB = parseInt(b.zip, 10) || 99999;
+    if (zipA !== zipB) return zipA - zipB;
+
+    const sA = parseStreetAndNumber(a.address);
+    const sB = parseStreetAndNumber(b.address);
+
+    const cmpStreet = sA.streetName.localeCompare(sB.streetName);
+    if (cmpStreet !== 0) return cmpStreet;
+
+    return sA.houseNum - sB.houseNum;
+  });
+
+  // Assign sequential sequence numbers, sharing stop # for exact same address & unit
+  let currentSeq = 1;
+  const addressToSeq = new Map();
+
+  outageSession.packages.forEach(p => {
+    const key = ((p.address || p.barcode) + '|' + (p.unit || '') + '|' + (p.zip || '')).toLowerCase().trim();
+    if (addressToSeq.has(key)) {
+      p.seq = addressToSeq.get(key);
+      p.multiStop = true;
+    } else {
+      p.seq = currentSeq;
+      addressToSeq.set(key, currentSeq);
+      currentSeq++;
+    }
+  });
+
+  saveOutageSession();
+  renderOutageTable();
+
+  const totalStops = currentSeq - 1;
+  showToast(`Auto-grouped ${outageSession.packages.length} packages across ${totalStops} stops by Zip & Street!`, 'ok');
+  if (preloadVoiceEnabled) {
+    speakText(`Packages grouped by Zip and Street. Total ${totalStops} stops.`);
+  }
+}
+
+// Option B: Tap-to-Number Mode
+function toggleOutageTapOrderMode() {
+  outageTapOrderActive = !outageTapOrderActive;
+  const btn = $('#outageTapOrderBtn');
+  const indicator = $('#outageTapStatusIndicator');
+  const table = $('#outageTable');
+
+  if (outageTapOrderActive) {
+    outageTapNextSeq = 1;
+    // Clear existing sequence numbers to start fresh tap ordering
+    outageSession.packages.forEach(p => p.seq = null);
+    saveOutageSession();
+
+    btn.addClass('btn-warning text-dark').removeClass('btn-outline-secondary');
+    indicator.text(`Tap Rows in Driving Order (Next: Stop #${outageTapNextSeq})`).show();
+    table.addClass('outage-tap-active');
+    showToast('Tap-to-Number active! Tap each row in the driving sequence you want.', 'ok');
+  } else {
+    btn.removeClass('btn-warning text-dark').addClass('btn-outline-secondary');
+    indicator.hide();
+    table.removeClass('outage-tap-active');
+    showToast('Exited Tap-to-Number mode', '');
+  }
+
+  renderOutageTable();
+}
+
+function handleOutageRowTap(pkgId) {
+  if (!outageTapOrderActive) return;
+  const pkg = outageSession.packages.find(p => p.id === pkgId);
+  if (!pkg) return;
+
+  const assigned = outageTapNextSeq++;
+  pkg.seq = assigned;
+
+  // If other packages share exact address, also assign same stop number
+  if (pkg.address) {
+    const norm = normOutageAddress(pkg.address);
+    outageSession.packages.forEach(p => {
+      if (p.id !== pkg.id && p.address && normOutageAddress(p.address) === norm && (p.unit || '') === (pkg.unit || '')) {
+        p.seq = assigned;
+        p.multiStop = true;
+        pkg.multiStop = true;
+      }
+    });
+  }
+
+  saveOutageSession();
+  renderOutageTable();
+
+  $('#outageTapStatusIndicator').text(`Tap Rows in Driving Order (Next: Stop #${outageTapNextSeq})`);
+  playPreloadAudio('success');
+  showToast(`Assigned Stop #${assigned} to ${pkg.barcode}`, 'ok');
+}
+
+function moveOutagePackage(idx, delta) {
+  if (!outageSession || !outageSession.packages) return;
+  const targetIdx = idx + delta;
+  if (targetIdx < 0 || targetIdx >= outageSession.packages.length) return;
+
+  const temp = outageSession.packages[idx];
+  outageSession.packages[idx] = outageSession.packages[targetIdx];
+  outageSession.packages[targetIdx] = temp;
+
+  saveOutageSession();
+  renderOutageTable();
+}
+
+// Option C: Activate as Live Manifest
+function activateOutageAsLiveManifest() {
+  if (!outageSession || !outageSession.packages || !outageSession.packages.length) {
+    showToast('No packages in intake to activate', 'warn');
+    return;
+  }
+
+  // Ensure all packages have a sequence number
+  const unassigned = outageSession.packages.some(p => !p.seq);
+  if (unassigned) {
+    autoGroupOutageByZipAndStreet();
+  }
+
+  // Build standard preloadSession
+  preloadSession = {
+    filename: 'Outage_Intake_' + new Date().toISOString().slice(0, 10) + '.csv',
+    timestamp: Date.now(),
+    packages: outageSession.packages.map((p, idx) => ({
+      id: p.id || ('pkg_' + Date.now() + '_' + idx),
+      barcode: p.barcode,
+      seq: String(p.seq || idx + 1),
+      address: [p.address, p.unit].filter(Boolean).join(' '),
+      unit: p.unit || '',
+      zip: p.zip || '',
+      status: 'pending', // ready for vehicle loading verification scan!
+      courier: p.courier || detectCourier(p.barcode),
+      driverName: 'Driver 1',
+      routeId: 'route_1',
+      routeLabel: 'Route 1',
+      fullLabel: 'Driver 1 — Route 1',
+      shortCode: 'D-R1',
+      color: DRIVER_COLORS[0]
+    })),
+    routes: [{
+      id: 'route_1',
+      driverName: 'Driver 1',
+      routeLabel: 'Route 1',
+      fullLabel: 'Driver 1 — Route 1',
+      shortCode: 'D-R1',
+      color: DRIVER_COLORS[0],
+      filename: 'Outage Intake Manifest',
+      courier: 'Universal'
+    }],
+    active: true
+  };
+
+  savePreloadSession();
+  renderPreloadSessionUI();
+
+  if (outageScanning) {
+    stopOutageCamera();
+  }
+
+  showToast(`🎉 Activated ${preloadSession.packages.length} packages into Live Manifest! Ready for vehicle loading scan.`, 'ok');
+  if (preloadVoiceEnabled) {
+    speakText(`Manifest activated with ${preloadSession.packages.length} packages. Ready to scan and load.`);
+  }
+}
+
+// --------------------- Navigation Export & Box Scanner Sync ---------------------
+
+function exportOutageManifest(format) {
+  if (!outageSession || !outageSession.packages || !outageSession.packages.length) {
+    showToast('No packages in intake to export', 'warn');
+    return;
+  }
+
+  const pkgs = [...outageSession.packages];
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  if (format === 'circuit') {
+    // Spoke / Circuit CSV: Address,Postal Code,Order,Recipient,Notes
+    const rows = pkgs.map((p, idx) => ({
+      'Address': [p.address, p.unit].filter(Boolean).join(' '),
+      'Postal Code': p.zip || '',
+      'Order': p.seq || (idx + 1),
+      'Recipient': p.recipient || '',
+      'Notes': p.barcode
+    }));
+    downloadCsvOrXlsx(rows, `Circuit_Outage_Intake_${dateStr}`, 'csv');
+    showToast('Exported Circuit manifest CSV', 'ok');
+  } else if (format === 'roadwarrior') {
+    // RoadWarrior CSV: Address,Zip,Stop,Client,Phone,Notes
+    const rows = pkgs.map((p, idx) => ({
+      'Address': [p.address, p.unit].filter(Boolean).join(' '),
+      'Zip': p.zip || '',
+      'Stop': p.seq || (idx + 1),
+      'Client': p.recipient || '',
+      'Phone': '',
+      'Notes': p.barcode
+    }));
+    downloadCsvOrXlsx(rows, `RoadWarrior_Outage_Intake_${dateStr}`, 'csv');
+    showToast('Exported RoadWarrior manifest CSV', 'ok');
+  } else if (format === 'xlsx') {
+    const rows = pkgs.map((p, idx) => ({
+      'Sequence': p.seq || (idx + 1),
+      'Barcode': p.barcode,
+      'Address': p.address,
+      'Unit': p.unit,
+      'Zip': p.zip,
+      'Recipient': p.recipient,
+      'Carrier': p.courier,
+      'Source': p.source
+    }));
+    downloadCsvOrXlsx(rows, `Outage_Intake_Backup_${dateStr}`, 'xlsx');
+    showToast('Downloaded XLSX Backup manifest', 'ok');
+  }
+}
+
+function syncOutageToBulkTask() {
+  if (!outageSession || !outageSession.packages || !outageSession.packages.length) {
+    showToast('No packages in intake to send to Box Scanner', 'warn');
+    return;
+  }
+
+  const sorted = [...outageSession.packages].sort((a, b) => {
+    const nA = parseFloat(a.seq) || 999999;
+    const nB = parseFloat(b.seq) || 999999;
+    return nA - nB;
+  });
+
+  const lines = sorted.map((p, idx) => {
+    const stopNum = p.seq || (idx + 1);
+    const addr = [p.address, p.unit].filter(Boolean).join(' ') || 'Package';
+    return `${p.barcode}, Stop #${stopNum} - ${addr}`;
+  });
+
+  $('#barcodesBatchText').val(lines.join('\n'));
+
+  // Switch to Bulk Task tab
+  const bulkTabBtn = document.getElementById('bulk-task-tab');
+  if (bulkTabBtn) {
+    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(bulkTabBtn).show();
+    } else {
+      $(bulkTabBtn).tab('show');
+    }
+  }
+
+  setTimeout(() => {
+    processBatch();
+    showToast(`⚡ Loaded ${sorted.length} packages into Box Scanner in stop order! Ready to scan off screen.`, 'ok');
+  }, 300);
+}
+
+// --------------------- Interactive Table Rendering & Modal Editing ---------------------
+
+function renderOutageTable() {
+  const tbody = $('#outageTableBody');
+  tbody.empty();
+
+  if (!outageSession || !outageSession.packages || !outageSession.packages.length) {
+    tbody.html(`
+      <tr>
+        <td colspan="5" class="text-center py-4 text-muted">
+          <i class="bi bi-boxes fs-3 d-block mb-1 text-secondary"></i>
+          No packages scanned in outage intake yet.<br>Point camera at 2D/1D label or enter barcode above.
+        </td>
+      </tr>
+    `);
+    return;
+  }
+
+  outageSession.packages.forEach((pkg, idx) => {
+    const seqDisplay = pkg.seq ? `#${pkg.seq}` : `--`;
+    const isMultiClass = pkg.multiStop ? 'outage-row-multi' : '';
+    const multiBadge = pkg.multiStop ? '<span class="badge bg-warning text-dark ms-1" style="font-size:9.5px;">Multi</span>' : '';
+    const sourceBadge = pkg.source ? `<span class="badge bg-light text-muted border ms-1" style="font-size:9.5px;">${escapeHtml(pkg.source)}</span>` : '';
+
+    const tr = $(`
+      <tr class="outage-pkg-row ${isMultiClass}" data-pkg-id="${pkg.id}">
+        <td>
+          <span class="outage-seq-badge bg-primary text-white">${seqDisplay}</span>
+        </td>
+        <td>
+          <span class="font-monospace fw-bold text-dark">${escapeHtml(pkg.barcode)}</span>
+          ${multiBadge}
+        </td>
+        <td>
+          <div class="fw-semibold text-dark text-truncate" style="max-width:210px;">
+            ${escapeHtml(pkg.address || 'Address pending')} ${pkg.unit ? '<span class="text-muted small">' + escapeHtml(pkg.unit) + '</span>' : ''}
+          </div>
+          <div class="small text-muted" style="font-size:10.5px;">
+            ${escapeHtml(pkg.courier || 'General')} ${sourceBadge}
+          </div>
+        </td>
+        <td>
+          <span class="font-monospace small">${escapeHtml(pkg.zip || '--')}</span>
+        </td>
+        <td class="text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1 me-1" style="font-size:11px;" type="button" onclick="event.stopPropagation(); openOutageEditModal('${pkg.id}')" title="Edit row">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:11px;" type="button" onclick="event.stopPropagation(); moveOutagePackage(${idx}, -1)" title="Move Up">
+            <i class="bi bi-chevron-up"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-1" style="font-size:11px;" type="button" onclick="event.stopPropagation(); moveOutagePackage(${idx}, 1)" title="Move Down">
+            <i class="bi bi-chevron-down"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" style="font-size:11px;" type="button" onclick="event.stopPropagation(); deleteOutagePackage('${pkg.id}')" title="Delete">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </td>
+      </tr>
+    `);
+
+    tr.on('click', function() {
+      if (outageTapOrderActive) {
+        handleOutageRowTap(pkg.id);
+      }
+    });
+
+    tbody.append(tr);
+  });
+}
+
+function openOutageEditModal(pkgId) {
+  const pkg = outageSession.packages.find(p => p.id === pkgId);
+  if (!pkg) return;
+
+  $('#editOutagePkgId').val(pkg.id);
+  $('#editOutageBarcode').val(pkg.barcode || '');
+  $('#editOutageAddress').val(pkg.address || '');
+  $('#editOutageUnit').val(pkg.unit || '');
+  $('#editOutageZip').val(pkg.zip || '');
+  $('#editOutageRecipient').val(pkg.recipient || '');
+  $('#editOutageSeq').val(pkg.seq || '');
+
+  const modalEl = document.getElementById('outageEditModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+}
+
+function saveOutageEditModal() {
+  const pkgId = $('#editOutagePkgId').val();
+  const pkg = outageSession.packages.find(p => p.id === pkgId);
+  if (!pkg) return;
+
+  pkg.barcode = ($('#editOutageBarcode').val() || '').trim().toUpperCase();
+  pkg.address = ($('#editOutageAddress').val() || '').trim();
+  pkg.unit = ($('#editOutageUnit').val() || '').trim();
+  pkg.zip = ($('#editOutageZip').val() || '').trim();
+  pkg.recipient = ($('#editOutageRecipient').val() || '').trim();
+  
+  const seqVal = $('#editOutageSeq').val();
+  pkg.seq = seqVal ? parseInt(seqVal, 10) : null;
+  pkg.courier = detectCourier(pkg.barcode);
+
+  saveOutageSession();
+  renderOutageTable();
+
+  const modalEl = document.getElementById('outageEditModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+  }
+
+  showToast('Package details updated', 'ok');
+}
+
+function deleteCurrentOutageEditPackage() {
+  const pkgId = $('#editOutagePkgId').val();
+  deleteOutagePackage(pkgId);
+  const modalEl = document.getElementById('outageEditModal');
+  if (modalEl) {
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+  }
+}
+
+function deleteOutagePackage(pkgId) {
+  const idx = outageSession.packages.findIndex(p => p.id === pkgId);
+  if (idx !== -1) {
+    outageSession.packages.splice(idx, 1);
+    saveOutageSession();
+    renderOutageTable();
+    showToast('Package removed from intake', '');
+  }
 }

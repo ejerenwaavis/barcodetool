@@ -57,50 +57,287 @@
               </div>
             </div>
 
-            <div class="panel">
-              <div class="manifest-head mb-3">
-                <div>
-                  <div class="manifest-title">Preload Manifest Upload</div>
-                  <div class="manifest-sub">Upload manifest to start sorting and package numbering</div>
+            <!-- Persistent Outage Intake Resume Banner -->
+            <div id="outageResumeBanner" class="alert alert-warning align-items-center justify-content-between flex-wrap gap-2 mb-3 d-none" style="border-left: 4px solid #f59e0b; background:#fffbeb;">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-lightning-charge-fill fs-5 text-warning"></i>
+                <div class="small">
+                  <strong class="text-dark">Active Outage Intake:</strong>
+                  <span id="outageResumeDetails" class="text-muted">0 packages scanned</span>
                 </div>
-                <div class="chip">STANDBY</div>
               </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-warning text-dark fw-bold py-1 px-2" style="font-size:12px;" onclick="resumeOutageSession()">Resume Intake</button>
+                <button class="btn btn-sm btn-outline-secondary py-1 px-2" style="font-size:12px;" onclick="confirmClearOutageSession(true)">Discard</button>
+              </div>
+            </div>
 
-              <!-- Native Label Dropzone -->
-              <label for="preloadFileInput" class="preload-dropzone mb-3 d-block text-center" id="preloadDropZone">
-                <i class="bi bi-cloud-arrow-up"></i>
-                <div class="fw-bold mb-1" style="font-size:15px;">Click to browse or drop manifest here</div>
-                <div class="small text-muted mb-2">Accepts <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, or <strong>.zip</strong> (multi-file supported)</div>
-                <div>
-                  <span class="btn primary" style="padding:8px 18px; font-size:13px;">
-                    <i class="bi bi-folder2-open me-1"></i>Select Manifest File
-                  </span>
-                </div>
-                <input type="file" id="preloadFileInput" accept=".csv,.tsv,.txt,.xls,.xlsx,.zip,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed" style="opacity: 0; position: absolute; z-index: -1; width: 1px; height: 1px; pointer-events: none;">
-              </label>
-
-              <!-- Quick Paste Option -->
-              <div class="text-center mb-2">
-                <button class="btn-link-sub" type="button" data-bs-toggle="collapse" data-bs-target="#preloadPasteCollapse" aria-expanded="false">
-                  <i class="bi bi-clipboard2-plus me-1"></i>Or paste raw CSV / tab-delimited text directly
+            <!-- Manifest Ingestion Mode Switcher -->
+            <div class="d-flex align-items-center justify-content-between p-1 bg-light rounded border mb-3">
+              <div class="btn-group w-100" role="group">
+                <button type="button" class="btn btn-sm py-2 fw-bold active" id="manifestModeUploadBtn" onclick="switchManifestMode('upload')">
+                  <i class="bi bi-file-earmark-arrow-up me-1 text-primary"></i>Upload Manifest
+                </button>
+                <button type="button" class="btn btn-sm py-2 fw-bold" id="manifestModeOutageBtn" onclick="switchManifestMode('outage')">
+                  <i class="bi bi-lightning-charge-fill me-1 text-warning"></i>Outage Intake Mode
+                  <span class="badge bg-warning text-dark ms-1" id="outageModeBadge" style="display:none; font-size:10.5px;">0</span>
                 </button>
               </div>
-              <div class="collapse mb-3" id="preloadPasteCollapse">
-                <div class="p-3 bg-light rounded border">
-                  <textarea id="preloadPasteText" class="form-control mono mb-2" rows="4" style="font-size:12px;" placeholder='"Barcode","Seq No","Address" or "Tracking No" [Tab] "Sequence" [Tab] "Street Address" ...'></textarea>
-                  <div class="text-end">
-                    <button class="btn primary" style="padding:6px 14px; font-size:12px;" onclick="parsePastedManifest()">Load Pasted Data</button>
+            </div>
+
+            <!-- Standard Manifest File Upload Card -->
+            <div id="preloadUploadCard">
+              <div class="panel">
+                <div class="manifest-head mb-3">
+                  <div>
+                    <div class="manifest-title">Preload Manifest Upload</div>
+                    <div class="manifest-sub">Upload manifest to start sorting and package numbering</div>
                   </div>
+                  <div class="chip">STANDBY</div>
+                </div>
+
+                <!-- Native Label Dropzone -->
+                <label for="preloadFileInput" class="preload-dropzone mb-3 d-block text-center" id="preloadDropZone">
+                  <i class="bi bi-cloud-arrow-up"></i>
+                  <div class="fw-bold mb-1" style="font-size:15px;">Click to browse or drop manifest here</div>
+                  <div class="small text-muted mb-2">Accepts <strong>.csv</strong>, <strong>.xls</strong>, <strong>.xlsx</strong>, or <strong>.zip</strong> (multi-file supported)</div>
+                  <div>
+                    <span class="btn primary" style="padding:8px 18px; font-size:13px;">
+                      <i class="bi bi-folder2-open me-1"></i>Select Manifest File
+                    </span>
+                  </div>
+                  <input type="file" id="preloadFileInput" accept=".csv,.tsv,.txt,.xls,.xlsx,.zip,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/x-zip-compressed" style="opacity: 0; position: absolute; z-index: -1; width: 1px; height: 1px; pointer-events: none;">
+                </label>
+
+                <!-- Quick Paste Option -->
+                <div class="text-center mb-2">
+                  <button class="btn-link-sub" type="button" data-bs-toggle="collapse" data-bs-target="#preloadPasteCollapse" aria-expanded="false">
+                    <i class="bi bi-clipboard2-plus me-1"></i>Or paste raw CSV / tab-delimited text directly
+                  </button>
+                </div>
+                <div class="collapse mb-3" id="preloadPasteCollapse">
+                  <div class="p-3 bg-light rounded border">
+                    <textarea id="preloadPasteText" class="form-control mono mb-2" rows="4" style="font-size:12px;" placeholder='"Barcode","Seq No","Address" or "Tracking No" [Tab] "Sequence" [Tab] "Street Address" ...'></textarea>
+                    <div class="text-end">
+                      <button class="btn primary" style="padding:6px 14px; font-size:12px;" onclick="parsePastedManifest()">Load Pasted Data</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Format note -->
+                <div class="p-2 rounded border small text-muted" style="background:var(--paper); font-size:11.5px;">
+                  <div class="d-flex align-items-center justify-content-between mb-1">
+                    <strong class="text-dark"><i class="bi bi-magic me-1" style="color:var(--accent);"></i>Universal Manifest Auto-Detection:</strong>
+                    <span class="badge bg-light text-secondary border">LaserShip · SpeedX · Circuit · RoadWarrior · Generic</span>
+                  </div>
+                  <div>Automatically detects and normalizes <strong>Barcode / Tracking</strong>, <strong>Sequence / Stop #</strong>, <strong>Address</strong>, <strong>Unit / Apt</strong>, and <strong>Zip Code</strong> from any CSV, Excel (.xlsx/.xls), or ZIP. Serial numbers and row indices are automatically excluded.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Outage Intake Mode Console (Offline Manifest Builder) -->
+            <div id="outageIntakeCard" style="display:none;">
+
+              <!-- 1. Flush Status Strip -->
+              <div class="preload-status-strip px-3 py-1.5 d-flex align-items-center justify-content-between border-bottom" id="outageStatusStrip">
+                <div class="d-flex align-items-center gap-2 overflow-hidden me-1">
+                  <span class="badge bg-warning text-dark fw-bold text-truncate" style="font-size:11px; letter-spacing:0.02em;">
+                    <i class="bi bi-lightning-charge-fill me-1"></i>Outage Intake
+                  </span>
+                  <span class="fw-semibold text-muted text-truncate" id="outageMiniInfo" style="font-size:11.5px;">
+                    <strong class="text-dark" id="outagePkgCount">0</strong> pkgs · <strong class="text-primary" id="outageStopCount">0</strong> stops
+                  </span>
+                </div>
+                <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                  <button class="btn btn-sm btn-outline-danger py-0 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11px; height:26px;" type="button" onclick="confirmClearOutageSession()" title="Clear and finish intake">
+                    <i class="bi bi-trash3 me-1"></i>Finish
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary py-0 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11px; height:26px;" type="button" onclick="switchManifestMode('upload')" title="Back to manifest upload">
+                    <i class="bi bi-arrow-left me-1"></i>Upload
+                  </button>
                 </div>
               </div>
 
-              <!-- Format note -->
-              <div class="p-2 rounded border small text-muted" style="background:var(--paper); font-size:11.5px;">
-                <div class="d-flex align-items-center justify-content-between mb-1">
-                  <strong class="text-dark"><i class="bi bi-magic me-1" style="color:var(--accent);"></i>Universal Manifest Auto-Detection:</strong>
-                  <span class="badge bg-light text-secondary border">LaserShip · SpeedX · Circuit · RoadWarrior · Generic</span>
+              <!-- 2. Outage Scanner Console Panel -->
+              <div class="panel preload-console-panel pt-2 mb-2">
+                
+                <div class="preload-top-scanner-grid mb-2">
+                  <!-- LEFT: Latest Intake Package Card -->
+                  <div class="preload-seq-card" id="outageLatestCard" style="background: linear-gradient(145deg, #ffffff 0%, #fffdf0 100%); border-color: #f59e0b;">
+                    <div class="d-flex justify-content-between align-items-center mb-1 w-100">
+                      <span class="text-uppercase small fw-bold text-muted d-flex align-items-center gap-1" style="font-size:10px; letter-spacing:0.04em;">
+                        <i class="bi bi-lightning-charge-fill text-warning"></i>Latest Intake #<span id="outageLatestIndex">--</span>
+                      </span>
+                      <div class="d-flex gap-2 align-items-center">
+                        <button type="button" class="btn-icon p-0" id="outageVoiceToggle" onclick="togglePreloadVoice()" title="Toggle voice">
+                          <i class="bi bi-megaphone" id="outageVoiceIcon" style="color:var(--muted); font-size:0.95rem;"></i>
+                        </button>
+                        <button type="button" class="btn-icon p-0" id="outageSoundToggle" onclick="togglePreloadSound()" title="Toggle sound">
+                          <i class="bi bi-volume-up-fill" id="outageSoundIcon" style="color:var(--accent); font-size:0.95rem;"></i>
+                        </button>
+                        <button type="button" class="btn-icon p-0" id="outageVibrateToggle" onclick="togglePreloadVibrate()" title="Toggle vibrate">
+                          <i class="bi bi-phone-vibrate" id="outageVibrateIcon" style="color:var(--accent); font-size:0.95rem;"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Latest Barcode & Courier Pill -->
+                    <div class="d-flex align-items-center justify-content-between gap-1 mb-1">
+                      <span class="font-monospace fw-bold text-dark text-truncate" id="outageLatestBarcode" style="font-size:1.05rem;">READY TO SCAN</span>
+                      <span class="badge bg-light text-muted border text-truncate" id="outageLatestCourier" style="font-size:10px;">Standby</span>
+                    </div>
+
+                    <!-- Address and Unit display -->
+                    <div class="text-truncate fw-semibold text-secondary" id="outageLatestAddress" style="font-size:12px;">Scan box 2D/1D barcode or snap label</div>
+                    <div class="d-flex align-items-center justify-content-between small text-muted mt-1">
+                      <span id="outageLatestUnit" class="text-truncate" style="font-size:11px;">Unit: --</span>
+                      <span id="outageLatestZip" class="badge bg-secondary font-monospace" style="font-size:10px;">ZIP: --</span>
+                    </div>
+
+                    <!-- Duplicate Alert Box -->
+                    <div id="outageDuplicateAlert" class="p-1 mt-1 rounded bg-danger text-white small fw-bold text-center" style="display:none; font-size:11px;">
+                      <i class="bi bi-exclamation-octagon-fill me-1"></i>ALREADY IN INTAKE (Duplicate!)
+                    </div>
+
+                    <!-- Multi-Package Alert Box -->
+                    <div id="outageMultiAlert" class="p-1 mt-1 rounded bg-warning text-dark small fw-bold text-center" style="display:none; font-size:11px;">
+                      <i class="bi bi-boxes me-1"></i>Multi-Package Stop (Shares address)
+                    </div>
+                  </div>
+
+                  <!-- RIGHT: Compact Camera Viewfinder (2D & 1D Simultaneous Decoder) -->
+                  <div class="preload-compact-cam-box" id="outageCompactCamBox">
+                    <div class="preload-cam-placeholder" id="outageCamPlaceholder" onclick="toggleOutageCamera()" title="Tap to start camera">
+                      <div class="preload-cam-placeholder-icon">
+                        <i class="bi bi-camera-fill"></i>
+                      </div>
+                      <span class="preload-cam-placeholder-text">Start 2D/1D Cam</span>
+                      <span class="preload-cam-placeholder-sub">QR, DataMatrix, 1D</span>
+                    </div>
+
+                    <div class="preload-cam-wrap" id="outageCamWrap" style="display:none;">
+                      <video id="outageVideo" playsinline muted></video>
+                      <div class="preload-scan-box" id="outageScanBox">
+                        <div class="preload-scan-line"></div>
+                      </div>
+                      <div class="preload-cam-status" id="outageCamStatus" style="display:none;">
+                        <span id="outageCamStatusText" style="font-size:11px;">Initializing...</span>
+                      </div>
+                      <button type="button" class="preload-cam-mini-toggle" onclick="toggleOutageCamera()" title="Stop camera">
+                        <i class="bi bi-x-circle-fill"></i>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div>Automatically detects and normalizes <strong>Barcode / Tracking</strong>, <strong>Sequence / Stop #</strong>, <strong>Address</strong>, <strong>Unit / Apt</strong>, and <strong>Zip Code</strong> from any CSV, Excel (.xlsx/.xls), or ZIP. Serial numbers and row indices are automatically excluded.</div>
+
+                <!-- Viewfinder Action Bar: Camera Toggle, Snap Label OCR, Voice Address -->
+                <div class="d-flex align-items-center justify-content-between gap-1 mb-2 px-1">
+                  <button class="btn btn-sm btn-outline-secondary py-1 px-2 fw-semibold d-inline-flex align-items-center gap-1" style="font-size:11px;" type="button" id="outageCamToggleBtn" onclick="toggleOutageCamera()">
+                    <i class="bi bi-camera"></i><span id="outageCamBtnText">Camera On</span>
+                  </button>
+
+                  <div class="d-flex gap-1">
+                    <button class="btn btn-sm btn-outline-primary py-1 px-2 fw-semibold d-inline-flex align-items-center gap-1" style="font-size:11px;" type="button" onclick="snapCurrentVideoOrFileForOcr()" title="Snap photo of label to extract street address">
+                      <i class="bi bi-crop"></i>Snap OCR
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning text-dark py-1 px-2 fw-semibold d-inline-flex align-items-center gap-1" style="font-size:11px;" type="button" onclick="startVoiceAddressInput('outageInputAddress')" title="Speak address via voice-to-text">
+                      <i class="bi bi-mic-fill text-danger"></i>Voice
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Manual Quick-Entry / Fix Strip -->
+                <div class="p-2 rounded border bg-light mb-2">
+                  <div class="row g-1 align-items-center">
+                    <div class="col-12 col-sm-4">
+                      <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white px-2"><i class="bi bi-upc-scan text-muted"></i></span>
+                        <input type="text" id="outageInputBarcode" class="form-control mono" placeholder="Barcode / Tracking #" style="font-size:11.5px; text-transform:uppercase;">
+                      </div>
+                    </div>
+                    <div class="col-7 col-sm-4">
+                      <div class="input-group input-group-sm">
+                        <input type="text" id="outageInputAddress" class="form-control" placeholder="Street Address" style="font-size:11.5px;">
+                        <button class="btn btn-outline-secondary px-2" type="button" onclick="startVoiceAddressInput('outageInputAddress')" title="Voice to text">
+                          <i class="bi bi-mic-fill text-danger"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="col-2 col-sm-2">
+                      <input type="text" id="outageInputUnit" class="form-control form-control-sm" placeholder="Apt" style="font-size:11px;">
+                    </div>
+                    <div class="col-3 col-sm-2">
+                      <div class="d-flex gap-1">
+                        <input type="text" id="outageInputZip" class="form-control form-control-sm font-monospace" placeholder="Zip" style="font-size:11px; width:55px;">
+                        <button class="btn btn-sm primary px-2 fw-bold" type="button" onclick="submitManualOutagePackage()" title="Add package">
+                          <i class="bi bi-plus-lg"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. Post-Intake Arrangement & Sequence Builder Toolbar -->
+                <div class="p-2 rounded border mb-2" style="background:var(--paper);">
+                  <div class="small fw-bold text-muted mb-1.5 d-flex align-items-center justify-content-between">
+                    <span><i class="bi bi-sort-down me-1 text-primary"></i>Arrangement & Route Sequencing:</span>
+                    <span id="outageTapStatusIndicator" class="badge bg-warning text-dark" style="display:none; font-size:10px;">Tap-to-Number Active</span>
+                  </div>
+                  <div class="d-flex flex-wrap gap-1.5">
+                    <button class="btn btn-sm btn-outline-primary py-1 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11.5px;" type="button" onclick="autoGroupOutageByZipAndStreet()" title="Group by Zip Code -> Street Name -> House # and assign sequential stops">
+                      <i class="bi bi-magic me-1"></i>Auto-Group (Zip & Street)
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary py-1 px-2 fw-semibold d-inline-flex align-items-center" style="font-size:11.5px;" id="outageTapOrderBtn" type="button" onclick="toggleOutageTapOrderMode()" title="Tap rows to assign stops 1, 2, 3 in manual sequence">
+                      <i class="bi bi-hand-index-thumb me-1"></i>Tap-to-Number
+                    </button>
+                    <button class="btn btn-sm btn-success py-1 px-2.5 fw-bold d-inline-flex align-items-center text-white ms-auto" style="font-size:11.5px; background:var(--success);" type="button" onclick="activateOutageAsLiveManifest()" title="Activate into live manifest console for vehicle loading scan">
+                      <i class="bi bi-play-circle-fill me-1"></i>Activate as Live Manifest
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 4. Third-Party Navigation Export & Box Scanner Sync Toolbar -->
+                <div class="p-2 rounded border mb-2 bg-light">
+                  <div class="small fw-bold text-muted mb-1.5"><i class="bi bi-box-arrow-up-right me-1 text-secondary"></i>Export & Box Scanner Sync:</div>
+                  <div class="d-flex flex-wrap gap-1.5">
+                    <button class="btn btn-sm btn-outline-primary py-1 px-2 fw-semibold" style="font-size:11px;" type="button" onclick="exportOutageManifest('circuit')">
+                      <i class="bi bi-signpost-split me-1"></i>Circuit / Spoke
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger py-1 px-2 fw-semibold" style="font-size:11px;" type="button" onclick="exportOutageManifest('roadwarrior')">
+                      <i class="bi bi-compass me-1"></i>RoadWarrior
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary py-1 px-2 fw-semibold" style="font-size:11px;" type="button" onclick="exportOutageManifest('xlsx')">
+                      <i class="bi bi-file-earmark-excel me-1"></i>XLSX Backup
+                    </button>
+                    <button class="btn btn-sm btn-warning text-dark py-1 px-2.5 fw-bold ms-auto" style="font-size:11px;" type="button" onclick="syncOutageToBulkTask()" title="Push all intake barcodes in sequence to Bulk Task Box Scanner">
+                      <i class="bi bi-upc-scan me-1"></i>Send to Box Scanner
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 5. Interactive Scanned Packages Intake List -->
+                <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+                  <table class="table table-sm table-hover align-middle mb-0" id="outageTable">
+                    <thead class="table-light sticky-top">
+                      <tr style="font-size:11px; text-transform:uppercase;">
+                        <th style="width: 55px;">Seq #</th>
+                        <th>Barcode / Tracking</th>
+                        <th>Address & Apt</th>
+                        <th style="width: 60px;">Zip</th>
+                        <th class="text-end" style="width: 90px;">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="outageTableBody" style="font-size:12px;">
+                      <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                          <i class="bi bi-boxes fs-3 d-block mb-1 text-secondary"></i>
+                          No packages scanned in outage intake yet.<br>Point camera at 2D/1D label or enter barcode above.
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
               </div>
             </div>
           </div>
@@ -996,6 +1233,66 @@
         </div>
       </div>
     </div>
+
+    <!-- Outage Edit Package Modal -->
+    <div class="modal fade" id="outageEditModal" tabindex="-1" aria-labelledby="outageEditModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header py-2 px-3">
+            <h6 class="modal-title fw-bold mb-0" id="outageEditModalLabel">
+              <i class="bi bi-pencil-square me-2 text-primary"></i>Edit Intake Package
+            </h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-3">
+            <input type="hidden" id="editOutagePkgId">
+            <div class="mb-2">
+              <label class="small fw-bold text-muted mb-1">Tracking Number / Barcode</label>
+              <input type="text" class="form-control mono form-control-sm" id="editOutageBarcode" style="text-transform:uppercase;">
+            </div>
+            <div class="mb-2">
+              <label class="small fw-bold text-muted mb-1 d-flex justify-content-between align-items-center">
+                <span>Street Address</span>
+                <button class="btn btn-link btn-sm p-0 text-danger" type="button" onclick="startVoiceAddressInput('editOutageAddress')" style="font-size:11px; text-decoration:none;">
+                  <i class="bi bi-mic-fill me-1"></i>Voice Input
+                </button>
+              </label>
+              <input type="text" class="form-control form-control-sm" id="editOutageAddress" placeholder="e.g. 1204 Ridge Road">
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <label class="small fw-bold text-muted mb-1">Apt / Unit / Suite</label>
+                <input type="text" class="form-control form-control-sm" id="editOutageUnit" placeholder="e.g. Apt 4B">
+              </div>
+              <div class="col-6">
+                <label class="small fw-bold text-muted mb-1">Zip Code</label>
+                <input type="text" class="form-control mono form-control-sm" id="editOutageZip" placeholder="e.g. 30338">
+              </div>
+            </div>
+            <div class="row g-2 mb-2">
+              <div class="col-7">
+                <label class="small fw-bold text-muted mb-1">Recipient Name (Optional)</label>
+                <input type="text" class="form-control form-control-sm" id="editOutageRecipient" placeholder="e.g. John Doe">
+              </div>
+              <div class="col-5">
+                <label class="small fw-bold text-muted mb-1">Stop / Seq #</label>
+                <input type="number" class="form-control mono form-control-sm" id="editOutageSeq" placeholder="e.g. 1">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer py-2 px-3 d-flex justify-content-between">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteCurrentOutageEditPackage()">Delete</button>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm ghost" data-bs-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-sm primary fw-bold" onclick="saveOutageEditModal()">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hidden Snap Label File Input (OCR Fallback) -->
+    <input type="file" id="outageSnapFileInput" accept="image/*" capture="environment" style="display:none;" onchange="handleOutageSnapFile(this.files[0])">
 
     <!-- Toast Notification Element -->
     <div id="appToast" class="d-print-none"></div>
